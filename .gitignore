@@ -1,6 +1,8 @@
 # Python
 __pycache__/
 *.pyc
+venv/
+.venv/
 
 # ML Models
 *.pkl
@@ -13,13 +15,12 @@ dataset/wesad_raw/
 # Generated Files
 *.csv
 
-# Virtual Environments
-venv/
-.venv/
+# Node.js
+node_modules/
+.cache/
 
 # IDE
 .vscode/
 
 # Logs
 *.log
-

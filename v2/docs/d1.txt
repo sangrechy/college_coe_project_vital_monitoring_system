@@ -1,0 +1,438 @@
+# CHAPTER 4: ARTIFICIAL INTELLIGENCE MODULE
+
+---
+
+# 4.1 Artificial Intelligence Technique Used
+
+## Random Forest Classifier
+
+The proposed wearable health monitoring system uses the **Random Forest Machine Learning Algorithm** for real-time health condition prediction.
+
+Random Forest is an ensemble learning technique that combines multiple Decision Trees to improve prediction accuracy and reduce overfitting. Each tree independently evaluates the input features and predicts a class label. The final output is determined using majority voting among all trees.
+
+### Basic Structure
+
+```text
+Input Features
+       │
+       ▼
+ Multiple Decision Trees
+       │
+       ▼
+ Majority Voting
+       │
+       ▼
+ Final Prediction
+```
+
+### Advantages of Random Forest
+
+* High prediction accuracy
+* Fast execution on ESP32-S3
+* Suitable for TinyML deployment
+* Handles noisy physiological data effectively
+* Low computational complexity
+* Supports real-time Edge AI inference
+
+---
+
+# 4.2 Datasets Used
+
+The proposed system uses two publicly available biomedical datasets:
+
+### Dataset 1: WESAD Dataset
+
+**Full Name:** Wearable Stress and Affect Detection Dataset
+
+**Purpose:** Stress Detection Model Training
+
+The WESAD dataset contains physiological signals collected from subjects during different emotional and mental states. It helps the AI learn how the human body behaves under stress and relaxation conditions.
+
+### WESAD Labels
+
+| Label | Class      |
+| ----- | ---------- |
+| 0     | Baseline   |
+| 1     | Stress     |
+| 2     | Amusement  |
+| 3     | Meditation |
+
+### WESAD Attributes
+
+| Attribute    | Description             |
+| ------------ | ----------------------- |
+| Heart Rate   | Beats per minute        |
+| HRV          | Heart Rate Variability  |
+| Temperature  | Body temperature        |
+| Motion Level | Physical activity level |
+
+---
+
+### Dataset 2: MIT-BIH Arrhythmia Database
+
+**Full Name:** MIT-BIH Arrhythmia Database
+
+**Purpose:** ECG Classification Model Training
+
+The MIT-BIH dataset contains annotated ECG recordings collected from patients with normal and abnormal cardiac rhythms. It helps the AI identify ECG abnormalities and arrhythmias.
+
+### MIT-BIH Labels Used
+
+| Label | Meaning                   |
+| ----- | ------------------------- |
+| 0     | Normal Beat (N)           |
+| 1     | Supraventricular Beat (S) |
+| 2     | Ventricular Beat (V)      |
+| 3     | Fusion Beat (F)           |
+| 4     | Unknown Beat (Q)          |
+| 5     | Other Abnormal Pattern    |
+
+### MIT-BIH Attributes
+
+| Attribute               | Description              |
+| ----------------------- | ------------------------ |
+| RR Interval             | Time between heartbeats  |
+| Peak Amplitude          | Maximum ECG voltage      |
+| Beat Standard Deviation | ECG waveform variability |
+| Beat Energy             | ECG signal power         |
+
+---
+
+# 4.3 Feature Description
+
+## RR Interval
+
+RR Interval is the time difference between two consecutive R-peaks in an ECG signal. It represents the cardiac rhythm and is widely used for calculating heart rate and rhythm regularity. Irregular RR intervals may indicate arrhythmias or abnormal cardiac activity.
+
+---
+
+## Peak Amplitude
+
+Peak amplitude is the maximum ECG voltage observed during a heartbeat. It reflects the strength of the heart's electrical activity and helps identify abnormal waveform patterns.
+
+---
+
+## Beat Standard Deviation
+
+Beat standard deviation measures the variability of ECG samples within a heartbeat. Larger deviations often indicate irregular waveform morphology and abnormal cardiac behaviour.
+
+---
+
+## Beat Energy
+
+Beat energy represents the total power contained within an ECG beat. It is calculated from squared ECG amplitudes and helps characterize waveform intensity and structure.
+
+---
+
+## Heart Rate (HR)
+
+Heart Rate indicates the number of heart beats per minute (BPM). Increased heart rate is commonly associated with stress, exercise, or cardiac abnormalities, while reduced heart rate may indicate bradycardia.
+
+---
+
+## Heart Rate Variability (HRV)
+
+HRV measures the variation between consecutive heart beats. Higher HRV generally indicates healthy autonomic regulation, whereas lower HRV is frequently associated with stress and fatigue.
+
+---
+
+## Body Temperature
+
+Body temperature is measured using the MLX90614 infrared sensor. Physiological stress and certain medical conditions can produce slight variations in body temperature.
+
+---
+
+## Motion Level
+
+Motion level is derived from MPU6050 accelerometer data. It indicates physical activity intensity and helps distinguish exercise-related physiological changes from stress-related changes.
+
+---
+
+# 4.4 ECG Classification Model
+
+## Model Overview
+
+The ECG Classification Model analyzes ECG-derived features and predicts cardiac condition classes.
+
+### Model Type
+
+Random Forest Classifier
+
+### Purpose
+
+Detection of ECG abnormalities and cardiac irregularities.
+
+### Model Structure
+
+| Property        | Value           |
+| --------------- | --------------- |
+| Algorithm       | Random Forest   |
+| Number of Trees | 22              |
+| Input Features  | 4               |
+| Output Classes  | 6               |
+| Decision Method | Majority Voting |
+
+### Input Features
+
+1. RR Interval
+2. Peak Amplitude
+3. Beat Standard Deviation
+4. Beat Energy
+
+### Input Format
+
+```cpp
+[
+ rr_interval,
+ peak_amp,
+ beat_std,
+ beat_energy
+]
+```
+
+### Function Definition
+
+```cpp
+int ecg_predict(
+    float rr_interval,
+    float peak_amp,
+    float beat_std,
+    float beat_energy
+);
+```
+
+### Output Format
+
+```cpp
+int ecg_class;
+```
+
+### Output Range
+
+```text
+0 – 5
+```
+
+---
+
+# 4.5 Stress Detection Model
+
+## Model Overview
+
+The Stress Detection Model predicts the user's stress condition using physiological and motion-related parameters.
+
+### Model Type
+
+Random Forest Classifier
+
+### Purpose
+
+Detection of physiological stress states.
+
+### Model Structure
+
+| Property        | Value           |
+| --------------- | --------------- |
+| Algorithm       | Random Forest   |
+| Number of Trees | 20              |
+| Input Features  | 4               |
+| Output Classes  | 4               |
+| Decision Method | Majority Voting |
+
+### Input Features
+
+1. Heart Rate
+2. Heart Rate Variability
+3. Body Temperature
+4. Motion Level
+
+### Input Format
+
+```cpp
+[
+ heart_rate,
+ hrv,
+ body_temperature,
+ motion_level
+]
+```
+
+### Function Definition
+
+```cpp
+int stress_predict(
+    float heart_rate,
+    float hrv,
+    float body_temperature,
+    float motion_level
+);
+```
+
+### Output Format
+
+```cpp
+int stress_class;
+```
+
+### Output Labels
+
+| Label | Meaning    |
+| ----- | ---------- |
+| 0     | Baseline   |
+| 1     | Stress     |
+| 2     | Amusement  |
+| 3     | Meditation |
+
+---
+
+# 4.6 Fusion Model
+
+## Model Overview
+
+The Fusion Model combines predictions from both the ECG Model and Stress Model to generate a final health assessment.
+
+### Model Type
+
+Rule-Based Decision Fusion
+
+### Purpose
+
+Integration of cardiac health information and stress information.
+
+### Input Parameters
+
+1. ECG Classification Result
+2. Stress Classification Result
+
+### Input Format
+
+```cpp
+[
+ ecg_class,
+ stress_class
+]
+```
+
+### Function Definition
+
+```cpp
+int fusion_predict(
+    int ecg_class,
+    int stress_class
+);
+```
+
+### Output Format
+
+```cpp
+int final_status;
+```
+
+### Output Labels
+
+| Output        | Meaning                             |
+| ------------- | ----------------------------------- |
+| HEALTHY       | Normal ECG and Normal Stress        |
+| STRESSED      | Stress Detected                     |
+| CARDIAC_ALERT | ECG Abnormality Detected            |
+| HIGH_RISK     | ECG Abnormality and Stress Detected |
+
+---
+
+# 4.7 AI Inference Workflow
+
+## Step 1: Data Acquisition
+
+Sensors continuously collect:
+
+* ECG Signal
+* Heart Rate
+* SpO₂
+* Body Temperature
+* Motion Data
+
+---
+
+## Step 2: Feature Extraction
+
+ESP32-S3 processes the signals and extracts:
+
+* RR Interval
+* Peak Amplitude
+* Beat Standard Deviation
+* Beat Energy
+* Heart Rate
+* HRV
+* Temperature
+* Motion Level
+
+---
+
+## Step 3: ECG Classification
+
+Extracted ECG features are processed by the ECG Random Forest model.
+
+```text
+ECG Features
+      │
+      ▼
+ECG Random Forest
+      │
+      ▼
+ECG Class
+```
+
+---
+
+## Step 4: Stress Classification
+
+Stress-related physiological features are processed by the Stress Random Forest model.
+
+```text
+Stress Features
+       │
+       ▼
+Stress Random Forest
+       │
+       ▼
+Stress Class
+```
+
+---
+
+## Step 5: Fusion Decision
+
+Outputs from both models are combined by the Fusion Model.
+
+```text
+ECG Class
+      +
+Stress Class
+      │
+      ▼
+Fusion Model
+      │
+      ▼
+Final Health Status
+```
+
+---
+
+# 4.8 Final AI Outputs
+
+The system can identify:
+
+* Normal Condition
+* Stress
+* Tachycardia
+* Bradycardia
+* Irregular Rhythm
+* ECG Anomaly
+* Cardiac Alert
+* High Risk Condition
+
+---
+
+# 4.9 Final Objective
+
+The final objective of the proposed system is to develop a wearable Edge AI health monitoring platform capable of continuously analyzing ECG, Heart Rate, SpO₂, Temperature and Motion signals to detect stress, ECG abnormalities and cardiac risk conditions in real time without requiring cloud-based processing.
