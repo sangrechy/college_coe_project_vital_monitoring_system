@@ -1,26 +1,60 @@
 # Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
 venv/
 .venv/
+env/
 
-# ML Models
+# SQLite & Databases
+*.db
+*.sqlite
+*.sqlite3
+
+# C/C++ & Arduino Compiled Artifacts
+*.o
+*.obj
+*.so
+*.dylib
+*.dll
+*.exe
+binaries/
+build/
+direct_call_test*
+fusion_predict_test*
+stress_predict_test*
+ecg_predict
+final_edge_ai_demo
+
+# ML Models & Checkpoints
 *.pkl
 *.joblib
+*.h5
+*.onnx
 
 # Raw Datasets
 dataset/mitbih_raw/
 dataset/wesad_raw/
 
-# Generated Files
+# Generated Data & CSVs
 *.csv
 
 # Node.js
 node_modules/
 .cache/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# IDE
+# IDE & OS Files
 .vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Archives
+*.zip
+*.tar.gz
 
 # Logs
 *.log
