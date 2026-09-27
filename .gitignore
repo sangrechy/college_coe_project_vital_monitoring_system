@@ -54,6 +54,7 @@ Thumbs.db
 
 # Archives
 *.zip
+!v1(trash).zip
 *.tar.gz
 
 # Logs
