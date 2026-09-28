@@ -4,6 +4,49 @@ An **ESP32-S3 based wearable health monitoring system** that collects ECG, heart
 
 ---
 
+# 📸 Project Images
+
+<div align="center">
+
+<img width="850" alt="Edge AI Wearable Health Monitor" src="https://github.com/user-attachments/assets/f4e5d72b-f06f-4d34-8394-02a7ae7d833e" />
+
+<br><br>
+
+<img width="500" alt="Wearable Setup 1" src="https://github.com/user-attachments/assets/10d5982e-85c3-40f6-b865-a8a75438ef01" />
+
+<br><br>
+
+<img width="300" alt="Wearable Setup 2" src="https://github.com/user-attachments/assets/fd39f5d5-ba74-451b-b020-ba7a455e9960" />
+<img width="300" alt="Wearable Setup 3" src="https://github.com/user-attachments/assets/6867e67f-5ece-426a-b807-85cbc8eced1d" />
+
+</div>
+
+---
+
+# 🎥 Demo
+
+<div align="center">
+
+<img width="800" alt="Dashboard Demo 1" src="https://github.com/user-attachments/assets/4666d9b0-704f-4773-9263-22572835c88e" />
+
+<br><br>
+
+<img width="800" alt="Dashboard Demo 2" src="https://github.com/user-attachments/assets/336baab3-113e-4879-8640-57cf76702220" />
+
+<br><br>
+
+<img width="800" alt="Dashboard Demo 3" src="https://github.com/user-attachments/assets/143551f8-1c14-4855-9701-238f2be0face" />
+
+<br><br>
+
+<img width="800" alt="Dashboard Demo 4" src="https://github.com/user-attachments/assets/85bcf956-f952-42e1-9c0f-5279ae5bf862" />
+
+</div>
+
+
+---
+
+
 # 📁 Project Directory Structure
 
 ```text
