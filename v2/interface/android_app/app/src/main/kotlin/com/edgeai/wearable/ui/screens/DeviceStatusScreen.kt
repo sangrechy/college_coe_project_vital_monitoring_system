@@ -19,12 +19,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -36,7 +40,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,23 +47,28 @@ import androidx.core.content.ContextCompat
 import com.edgeai.wearable.ble.BleConnectionState
 import com.edgeai.wearable.data.BadgeLevel
 import com.edgeai.wearable.data.HealthLabels
-import com.edgeai.wearable.ui.WearableUiState
+import com.edgeai.wearable.ui.DeviceUiState
 import com.edgeai.wearable.ui.components.AlertBanner
 import com.edgeai.wearable.ui.components.ClinicalCard
 import com.edgeai.wearable.ui.components.KeyValueRow
 import com.edgeai.wearable.ui.components.StatusBadge
-import com.edgeai.wearable.ui.theme.AccentBlueLight
-import com.edgeai.wearable.ui.theme.BgPage
+import com.edgeai.wearable.ui.theme.AccentTeal
+import com.edgeai.wearable.ui.theme.AccentTealBorder
+import com.edgeai.wearable.ui.theme.AccentTealLight
+import com.edgeai.wearable.ui.theme.BgSoft
 import com.edgeai.wearable.ui.theme.BorderLight
 import com.edgeai.wearable.ui.theme.DangerColor
-import com.edgeai.wearable.ui.theme.InfoBorder
+import com.edgeai.wearable.ui.theme.IbmPlexMonoFontFamily
+import com.edgeai.wearable.ui.theme.ManropeFontFamily
 import com.edgeai.wearable.ui.theme.TextMuted
 import com.edgeai.wearable.ui.theme.TextPrimary
 import com.edgeai.wearable.ui.theme.TextSecondary
 
 @Composable
 fun DeviceStatusScreen(
-    state: WearableUiState,
+    device: DeviceUiState,
+    packetRate: Double,
+    signalQuality: String,
     onScan: () -> Unit,
     onStopScan: () -> Unit,
     onConnect: (String?) -> Unit,
@@ -120,15 +128,20 @@ fun DeviceStatusScreen(
     if (showClearDialog) {
         AlertDialog(
             onDismissRequest = { showClearDialog = false },
-            title = { Text("Clear Local History?") },
-            text = { Text("This will delete all ${state.dbRecordCount} records stored in the local SQLite database.") },
+            title = { Text("Clear Local History?", fontFamily = ManropeFontFamily, fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "This will delete all ${device.dbRecordCount} records stored in the local SQLite database.",
+                    fontFamily = ManropeFontFamily,
+                )
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
                         showClearDialog = false
                         onClearDatabase()
                     }
-                ) { Text("Clear All", color = DangerColor) }
+                ) { Text("Clear All", color = DangerColor, fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
                 TextButton(onClick = { showClearDialog = false }) { Text("Cancel") }
@@ -137,15 +150,15 @@ fun DeviceStatusScreen(
     }
 
     val connBadge = when {
-        state.isConnected -> BadgeLevel.OK
-        state.bleState == BleConnectionState.CONNECTING || state.bleState == BleConnectionState.SCANNING -> BadgeLevel.WARN
+        device.isConnected -> BadgeLevel.OK
+        device.bleState == BleConnectionState.CONNECTING || device.bleState == BleConnectionState.SCANNING -> BadgeLevel.WARN
         else -> BadgeLevel.DANGER
     }
     val connText = when {
-        state.demoMode -> "Demo Active"
-        state.bleState == BleConnectionState.CONNECTED -> "Active"
-        state.bleState == BleConnectionState.CONNECTING -> "Connecting"
-        state.bleState == BleConnectionState.SCANNING -> "Scanning"
+        device.demoMode -> "Demo Active"
+        device.bleState == BleConnectionState.CONNECTED -> "Active"
+        device.bleState == BleConnectionState.CONNECTING -> "Connecting"
+        device.bleState == BleConnectionState.SCANNING -> "Scanning"
         else -> "Inactive"
     }
 
@@ -153,16 +166,17 @@ fun DeviceStatusScreen(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         permissionDeniedMsg?.let {
-            AlertBanner(text = it, level = BadgeLevel.DANGER)
+            AlertBanner(text = it, level = BadgeLevel.DANGER, icon = Icons.Rounded.Warning)
         }
-        state.bleMessage?.let {
+        device.bleMessage?.let {
             AlertBanner(
                 text = it,
-                level = if (state.isConnected) BadgeLevel.OK else BadgeLevel.INFO,
+                level = if (device.isConnected) BadgeLevel.OK else BadgeLevel.INFO,
+                icon = Icons.Rounded.Info,
             )
         }
 
@@ -173,43 +187,51 @@ fun DeviceStatusScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("BLE Connection", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-                StatusBadge(text = connText, level = connBadge)
+                Text("BLE Connection", fontFamily = ManropeFontFamily, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                StatusBadge(text = connText, level = connBadge, showDot = true)
             }
-            Spacer(modifier = Modifier.height(6.dp))
-            KeyValueRow("Status", if (state.isConnected) "Connected" else state.bleState.name)
-            KeyValueRow("Device Name", state.deviceName ?: "—", mono = true)
-            KeyValueRow("MAC Address", state.deviceAddress ?: "—", mono = true)
+            Spacer(modifier = Modifier.height(8.dp))
+            KeyValueRow("Status", if (device.isConnected) "Connected" else device.bleState.name)
+            KeyValueRow("Device Name", device.deviceName ?: "—", mono = true)
+            KeyValueRow("MAC Address", device.deviceAddress ?: "—", mono = true)
             KeyValueRow("Service UUID", "…789001", mono = true)
             KeyValueRow("Characteristic UUID", "…789002", mono = true)
             KeyValueRow("Update Rate", "~100 ms (10 Hz)", mono = true, showDivider = false)
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                if (!state.isConnected) {
+                if (!device.isConnected) {
                     Button(
                         onClick = { runWithBlePermission { onConnect(null) } },
-                        enabled = state.bleState != BleConnectionState.CONNECTING,
+                        enabled = device.bleState != BleConnectionState.CONNECTING,
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
+                        shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.weight(1f),
                     ) {
-                        Text(if (state.bleState == BleConnectionState.CONNECTING) "Connecting…" else "Connect Target")
+                        Text(
+                            if (device.bleState == BleConnectionState.CONNECTING) "Connecting…" else "Connect Target",
+                            fontFamily = ManropeFontFamily,
+                            fontWeight = FontWeight.SemiBold,
+                        )
                     }
                     OutlinedButton(
                         onClick = { runWithBlePermission { onConnectAutoScan() } },
-                        enabled = state.bleState != BleConnectionState.CONNECTING,
+                        enabled = device.bleState != BleConnectionState.CONNECTING,
+                        shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.weight(1f),
                     ) {
-                        Text("Auto-Find")
+                        Text("Auto-Find", fontFamily = ManropeFontFamily, fontWeight = FontWeight.SemiBold)
                     }
                 } else {
                     OutlinedButton(
                         onClick = onDisconnect,
+                        shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text("Disconnect")
+                        Text("Disconnect", fontFamily = ManropeFontFamily, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -217,71 +239,77 @@ fun DeviceStatusScreen(
 
         // System Diagnostics Card
         ClinicalCard {
-            Text("System Diagnostics", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-            Spacer(modifier = Modifier.height(6.dp))
-            KeyValueRow("Transport", if (state.demoMode) "Synthetic Simulator" else "Direct Android BLE", mono = true)
-            KeyValueRow("Packet Rate", "${state.packetRate} Hz", mono = true)
-            KeyValueRow("Signal Quality", state.signalQuality)
-            KeyValueRow("App Uptime", HealthLabels.formatUptime(state.uptimeSeconds), mono = true)
-            KeyValueRow("Records in DB", state.dbRecordCount.toString(), mono = true)
-            KeyValueRow("Storage", "SQLite (on-device)", mono = true, showDivider = false)
+            Text("System Diagnostics", fontFamily = ManropeFontFamily, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Spacer(modifier = Modifier.height(8.dp))
+            KeyValueRow("Transport", if (device.demoMode) "Synthetic Simulator" else "Direct Android BLE", mono = true)
+            KeyValueRow("Packet Rate", "$packetRate Hz", mono = true)
+            KeyValueRow("Signal Quality", signalQuality)
+            KeyValueRow("App Uptime", HealthLabels.formatUptime(device.uptimeSeconds), mono = true)
+            KeyValueRow("Records in DB", device.dbRecordCount.toString(), mono = true)
+            KeyValueRow("Storage", "SQLite WAL (on-device)", mono = true, showDivider = false)
         }
 
         // BLE Device Scanner
         ClinicalCard {
-            Text("BLE Device Scanner", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-            Text("Scan nearby BLE peripherals and tap to connect", fontSize = 12.sp, color = TextMuted)
-            Spacer(modifier = Modifier.height(10.dp))
+            Text("BLE Device Scanner", fontFamily = ManropeFontFamily, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Text("Scan nearby BLE peripherals and tap to connect", fontFamily = ManropeFontFamily, fontSize = 12.sp, color = TextMuted)
+            Spacer(modifier = Modifier.height(12.dp))
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = {
-                        if (state.isScanning) onStopScan() else runWithBlePermission { onScan() }
-                    },
-                ) {
-                    Text(if (state.isScanning) "Stop Scan" else "Scan for Devices")
-                }
+            Button(
+                onClick = {
+                    if (device.isScanning) onStopScan() else runWithBlePermission { onScan() }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
+                shape = RoundedCornerShape(10.dp),
+            ) {
+                Text(
+                    if (device.isScanning) "Stop Scan" else "Scan for Devices",
+                    fontFamily = ManropeFontFamily,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
 
-            if (state.scannedDevices.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(12.dp))
+            if (device.scannedDevices.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(14.dp))
                 Text(
-                    "${state.scannedDevices.size} device(s) found — tap to connect:",
+                    "${device.scannedDevices.size} device(s) found — tap to connect:",
+                    fontFamily = ManropeFontFamily,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = TextSecondary,
                 )
-                Spacer(modifier = Modifier.height(6.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    state.scannedDevices.forEach { d ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    device.scannedDevices.forEach { d ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (d.hasTargetService) AccentBlueLight else BgPage)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (d.hasTargetService) AccentTealLight else BgSoft)
                                 .border(
                                     1.dp,
-                                    if (d.hasTargetService) InfoBorder else BorderLight,
-                                    RoundedCornerShape(8.dp),
+                                    if (d.hasTargetService) AccentTealBorder else BorderLight,
+                                    RoundedCornerShape(12.dp),
                                 )
                                 .clickable {
                                     runWithBlePermission { onConnect(d.address) }
                                 }
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                                .padding(horizontal = 14.dp, vertical = 11.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = if (d.hasTargetService) "${d.name} ★" else d.name,
+                                    fontFamily = ManropeFontFamily,
                                     fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
+                                    fontWeight = FontWeight.Bold,
                                     color = TextPrimary,
                                 )
                                 Text(
                                     text = d.address,
                                     fontSize = 11.sp,
-                                    fontFamily = FontFamily.Monospace,
+                                    fontFamily = IbmPlexMonoFontFamily,
                                     color = TextMuted,
                                 )
                             }
@@ -289,7 +317,7 @@ fun DeviceStatusScreen(
                                 Text(
                                     text = "${d.rssi} dBm",
                                     fontSize = 11.sp,
-                                    fontFamily = FontFamily.Monospace,
+                                    fontFamily = IbmPlexMonoFontFamily,
                                     color = TextSecondary,
                                 )
                             }
@@ -301,17 +329,18 @@ fun DeviceStatusScreen(
 
         // Settings & Tools Card
         ClinicalCard {
-            Text("Settings & Tools", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-            Spacer(modifier = Modifier.height(10.dp))
+            Text("Settings & Tools", fontFamily = ManropeFontFamily, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Spacer(modifier = Modifier.height(12.dp))
 
             OutlinedTextField(
-                value = state.targetAddress,
+                value = device.targetAddress,
                 onValueChange = onSetTargetAddress,
-                label = { Text("Default ESP32 MAC Address") },
+                label = { Text("Default ESP32 MAC Address", fontFamily = ManropeFontFamily) },
                 singleLine = true,
+                shape = RoundedCornerShape(10.dp),
                 modifier = Modifier.fillMaxWidth(),
             )
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -319,19 +348,20 @@ fun DeviceStatusScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Auto-Reconnect BLE", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
-                    Text("Retry connection every 6s when disconnected", fontSize = 11.sp, color = TextMuted)
+                    Text("Auto-Reconnect BLE", fontFamily = ManropeFontFamily, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                    Text("Retry connection every 6s when disconnected", fontFamily = ManropeFontFamily, fontSize = 11.sp, color = TextMuted)
                 }
                 Switch(
-                    checked = state.autoReconnect,
+                    checked = device.autoReconnect,
                     onCheckedChange = { enabled ->
                         if (enabled) runWithBlePermission { onSetAutoReconnect(true) }
                         else onSetAutoReconnect(false)
                     },
+                    colors = SwitchDefaults.colors(checkedTrackColor = AccentTeal),
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -339,29 +369,35 @@ fun DeviceStatusScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Demo Simulation Mode", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
-                    Text("Generate live 10 Hz synthetic ECG & vitals without hardware", fontSize = 11.sp, color = TextMuted)
+                    Text("Demo Simulation Mode", fontFamily = ManropeFontFamily, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                    Text("Generate live 10 Hz synthetic ECG & vitals without hardware", fontFamily = ManropeFontFamily, fontSize = 11.sp, color = TextMuted)
                 }
                 Switch(
-                    checked = state.demoMode,
+                    checked = device.demoMode,
                     onCheckedChange = onSetDemoMode,
+                    colors = SwitchDefaults.colors(checkedTrackColor = AccentTeal),
                 )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(14.dp))
             Button(
                 onClick = { showClearDialog = true },
                 colors = ButtonDefaults.buttonColors(containerColor = DangerColor),
+                shape = RoundedCornerShape(10.dp),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("Clear SQLite History (${state.dbRecordCount} rows)")
+                Text(
+                    "Clear SQLite History (${device.dbRecordCount} rows)",
+                    fontFamily = ManropeFontFamily,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
         }
 
         // ESP32 Hardware Reference
         ClinicalCard {
-            Text("ESP32 Configuration Reference", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-            Spacer(modifier = Modifier.height(6.dp))
+            Text("ESP32 Configuration Reference", fontFamily = ManropeFontFamily, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Spacer(modifier = Modifier.height(8.dp))
             KeyValueRow("Device Name", "EdgeAI_Wearable", mono = true)
             KeyValueRow("Service UUID", "12345678-...-789001", mono = true)
             KeyValueRow("Char UUID", "12345678-...-789002", mono = true)
@@ -374,6 +410,6 @@ fun DeviceStatusScreen(
             KeyValueRow("Refractory", "300 ms", mono = true)
             KeyValueRow("Requested MTU", "247 bytes", mono = true, showDivider = false)
         }
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(10.dp))
     }
 }

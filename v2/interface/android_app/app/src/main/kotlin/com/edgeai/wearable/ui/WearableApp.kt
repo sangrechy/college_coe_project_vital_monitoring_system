@@ -1,20 +1,24 @@
 package com.edgeai.wearable.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ShowChart
 import androidx.compose.material.icons.rounded.Bluetooth
 import androidx.compose.material.icons.rounded.Dashboard
 import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.MonitorHeart
-import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -30,8 +34,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -45,14 +53,17 @@ import com.edgeai.wearable.ui.screens.EcgMonitorScreen
 import com.edgeai.wearable.ui.screens.HistoricalTrendsScreen
 import com.edgeai.wearable.ui.screens.OverviewScreen
 import com.edgeai.wearable.ui.screens.VitalSignsScreen
-import com.edgeai.wearable.ui.theme.AccentBlue
-import com.edgeai.wearable.ui.theme.AccentBlueLight
+import com.edgeai.wearable.ui.theme.AccentTeal
 import com.edgeai.wearable.ui.theme.BgCard
-import com.edgeai.wearable.ui.theme.BgNavy
+import com.edgeai.wearable.ui.theme.BgNavActive
 import com.edgeai.wearable.ui.theme.BgPage
-import com.edgeai.wearable.ui.theme.TextInvert
+import com.edgeai.wearable.ui.theme.BorderLight
+import com.edgeai.wearable.ui.theme.IbmPlexMonoFontFamily
+import com.edgeai.wearable.ui.theme.ManropeFontFamily
 import com.edgeai.wearable.ui.theme.TextMuted
-import com.edgeai.wearable.ui.theme.TextSidebar
+import com.edgeai.wearable.ui.theme.TextNav
+import com.edgeai.wearable.ui.theme.TextNavActive
+import com.edgeai.wearable.ui.theme.TextPrimary
 
 enum class WearableTab(
     val label: String,
@@ -61,11 +72,11 @@ enum class WearableTab(
     val icon: ImageVector,
 ) {
     OVERVIEW("Home", "System Overview", "AD8232 · MAX30102 · TMP117 · MPU6500", Icons.Rounded.Dashboard),
-    ECG("ECG", "ECG Monitor", "Live raw & filtered AD8232 waveform", Icons.Rounded.MonitorHeart),
+    ECG("ECG", "ECG Monitor", "Live raw & filtered AD8232 signal", Icons.Rounded.MonitorHeart),
     VITALS("Vitals", "Vital Signs", "HR, SpO₂, HRV, Temp & Motion", Icons.Rounded.Favorite),
-    AI("AI", "AI Results", "ESP32-S3 on-device inference", Icons.Rounded.Psychology),
+    AI("AI", "AI Results", "ESP32-S3 on-device inference", Icons.Rounded.Memory),
     TRENDS("Trends", "Historical Trends", "Local SQLite time-series", Icons.AutoMirrored.Rounded.ShowChart),
-    DEVICE("Device", "Device & Settings", "BLE scanner, diagnostics & storage", Icons.Rounded.Bluetooth),
+    DEVICE("Device", "Device Status", "BLE link, diagnostics & settings", Icons.Rounded.Bluetooth),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -73,123 +84,221 @@ enum class WearableTab(
 fun WearableApp(
     viewModel: WearableViewModel = viewModel(),
 ) {
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val deviceState by viewModel.deviceState.collectAsStateWithLifecycle()
     var currentTab by rememberSaveable { mutableStateOf(WearableTab.OVERVIEW) }
 
     Scaffold(
         containerColor = BgPage,
         topBar = {
-            TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BgNavy,
-                    titleContentColor = TextInvert,
-                ),
-                title = {
-                    Column {
-                        Text(
-                            text = currentTab.title,
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = TextInvert,
+            Column {
+                TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = BgCard,
+                        titleContentColor = TextPrimary,
+                    ),
+                    title = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(11.dp),
+                        ) {
+                            // Deep teal rounded brand-mark matching Sidebar.js
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(11.dp))
+                                    .background(AccentTeal),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.MonitorHeart,
+                                    contentDescription = "Health Monitor",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = currentTab.title,
+                                    fontFamily = ManropeFontFamily,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = (-0.3).sp,
+                                    color = TextPrimary,
+                                )
+                                Text(
+                                    text = currentTab.subtitle,
+                                    fontFamily = ManropeFontFamily,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = TextMuted,
+                                    maxLines = 1,
+                                )
+                            }
+                        }
+                    },
+                    actions = {
+                        TopBarStatusActions(
+                            packetRate = deviceState.packetRate,
+                            isConnected = deviceState.isConnected,
+                            demoMode = deviceState.demoMode,
                         )
-                        Text(
-                            text = currentTab.subtitle,
-                            fontSize = 11.sp,
-                            color = TextSidebar,
-                        )
-                    }
-                },
-                actions = {
-                    Row(
-                        modifier = Modifier.padding(end = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Text(
-                            text = "${state.packetRate} Hz",
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                            color = TextSidebar,
-                        )
-                        StatusBadge(
-                            text = when {
-                                state.demoMode -> "● Demo"
-                                state.isConnected -> "● BLE"
-                                else -> "○ Offline"
-                            },
-                            level = when {
-                                state.demoMode -> BadgeLevel.INFO
-                                state.isConnected -> BadgeLevel.OK
-                                else -> BadgeLevel.DANGER
-                            },
-                        )
-                    }
-                },
-            )
+                    },
+                )
+                HorizontalDivider(color = BorderLight, thickness = 1.dp)
+            }
         },
         bottomBar = {
-            NavigationBar(
-                containerColor = BgCard,
-                tonalElevation = 2.dp,
-            ) {
-                WearableTab.entries.forEach { tab ->
-                    NavigationBarItem(
-                        selected = currentTab == tab,
-                        onClick = { currentTab = tab },
-                        icon = { Icon(tab.icon, contentDescription = tab.label) },
-                        label = { Text(tab.label, fontSize = 10.sp, maxLines = 1) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = AccentBlue,
-                            selectedTextColor = AccentBlue,
-                            indicatorColor = AccentBlueLight,
-                            unselectedIconColor = TextMuted,
-                            unselectedTextColor = TextMuted,
-                        ),
-                    )
+            Column {
+                HorizontalDivider(color = BorderLight, thickness = 1.dp)
+                NavigationBar(
+                    containerColor = BgCard,
+                    tonalElevation = 0.dp,
+                ) {
+                    WearableTab.entries.forEach { tab ->
+                        NavigationBarItem(
+                            selected = currentTab == tab,
+                            onClick = { currentTab = tab },
+                            icon = { Icon(tab.icon, contentDescription = tab.label, modifier = Modifier.size(21.dp)) },
+                            label = {
+                                Text(
+                                    tab.label,
+                                    fontFamily = ManropeFontFamily,
+                                    fontSize = 10.sp,
+                                    fontWeight = if (currentTab == tab) FontWeight.Bold else FontWeight.SemiBold,
+                                    maxLines = 1,
+                                )
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = TextNavActive,
+                                selectedTextColor = TextNavActive,
+                                indicatorColor = BgNavActive,
+                                unselectedIconColor = TextNav,
+                                unselectedTextColor = TextNav,
+                            ),
+                        )
+                    }
                 }
             }
         },
     ) { innerPadding ->
+        // Warm stone canvas with subtle radial teal glow at top-right (matching body in global.css)
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(BgPage)
+                .drawBehind {
+                    drawRect(
+                        brush = Brush.radialGradient(
+                            colors = listOf(AccentTeal.copy(alpha = 0.08f), Color.Transparent),
+                            center = Offset(size.width * 0.92f, -size.height * 0.05f),
+                            radius = size.width * 0.95f,
+                        )
+                    )
+                }
                 .padding(innerPadding),
         ) {
             when (currentTab) {
-                WearableTab.OVERVIEW -> OverviewScreen(
-                    state = state,
-                    onNavigateToEcg = { currentTab = WearableTab.ECG },
-                    onNavigateToVitals = { currentTab = WearableTab.VITALS },
-                    onNavigateToAi = { currentTab = WearableTab.AI },
-                    onNavigateToDevice = { currentTab = WearableTab.DEVICE },
-                )
+                WearableTab.OVERVIEW -> {
+                    val live by viewModel.liveState.collectAsStateWithLifecycle()
+                    OverviewScreen(
+                        live = live,
+                        isConnected = deviceState.isConnected,
+                        onNavigateToEcg = { currentTab = WearableTab.ECG },
+                        onNavigateToVitals = { currentTab = WearableTab.VITALS },
+                        onNavigateToAi = { currentTab = WearableTab.AI },
+                        onNavigateToDevice = { currentTab = WearableTab.DEVICE },
+                    )
+                }
 
-                WearableTab.ECG -> EcgMonitorScreen(state = state)
+                WearableTab.ECG -> {
+                    val live by viewModel.liveState.collectAsStateWithLifecycle()
+                    EcgMonitorScreen(live = live)
+                }
 
-                WearableTab.VITALS -> VitalSignsScreen(state = state)
+                WearableTab.VITALS -> {
+                    val live by viewModel.liveState.collectAsStateWithLifecycle()
+                    val history by viewModel.historyState.collectAsStateWithLifecycle()
+                    VitalSignsScreen(
+                        live = live,
+                        history = history,
+                        isConnected = deviceState.isConnected,
+                    )
+                }
 
-                WearableTab.AI -> AiResultsScreen(state = state)
+                WearableTab.AI -> {
+                    val live by viewModel.liveState.collectAsStateWithLifecycle()
+                    AiResultsScreen(live = live)
+                }
 
-                WearableTab.TRENDS -> HistoricalTrendsScreen(
-                    state = state,
-                    onSelectWindow = viewModel::setHistoryWindow,
-                    onRefresh = viewModel::refreshHistory,
-                )
+                WearableTab.TRENDS -> {
+                    val history by viewModel.historyState.collectAsStateWithLifecycle()
+                    HistoricalTrendsScreen(
+                        history = history,
+                        dbRecordCount = deviceState.dbRecordCount,
+                        onSelectWindow = viewModel::setHistoryWindow,
+                        onRefresh = viewModel::refreshHistory,
+                    )
+                }
 
-                WearableTab.DEVICE -> DeviceStatusScreen(
-                    state = state,
-                    onScan = viewModel::startScan,
-                    onStopScan = viewModel::stopScan,
-                    onConnect = viewModel::connect,
-                    onConnectAutoScan = viewModel::connectAutoScan,
-                    onDisconnect = viewModel::disconnect,
-                    onSetAutoReconnect = viewModel::setAutoReconnect,
-                    onSetTargetAddress = viewModel::setTargetAddress,
-                    onSetDemoMode = viewModel::setDemoMode,
-                    onClearDatabase = viewModel::clearDatabase,
-                )
+                WearableTab.DEVICE -> {
+                    DeviceStatusScreen(
+                        device = deviceState,
+                        packetRate = deviceState.packetRate,
+                        signalQuality = deviceState.signalQuality,
+                        onScan = viewModel::startScan,
+                        onStopScan = viewModel::stopScan,
+                        onConnect = viewModel::connect,
+                        onConnectAutoScan = viewModel::connectAutoScan,
+                        onDisconnect = viewModel::disconnect,
+                        onSetAutoReconnect = viewModel::setAutoReconnect,
+                        onSetTargetAddress = viewModel::setTargetAddress,
+                        onSetDemoMode = viewModel::setDemoMode,
+                        onClearDatabase = viewModel::clearDatabase,
+                    )
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun TopBarStatusActions(
+    packetRate: Double,
+    isConnected: Boolean,
+    demoMode: Boolean,
+) {
+    Row(
+        modifier = Modifier.padding(end = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(999.dp))
+                .background(BgPage)
+                .border(1.dp, BorderLight, RoundedCornerShape(999.dp))
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            Text(
+                text = "$packetRate Hz",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = IbmPlexMonoFontFamily,
+                color = TextPrimary,
+            )
+        }
+        StatusBadge(
+            text = when {
+                demoMode -> "Demo"
+                isConnected -> "BLE"
+                else -> "Offline"
+            },
+            level = when {
+                demoMode -> BadgeLevel.INFO
+                isConnected -> BadgeLevel.OK
+                else -> BadgeLevel.DANGER
+            },
+            showDot = true,
+        )
     }
 }

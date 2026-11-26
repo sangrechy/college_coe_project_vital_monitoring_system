@@ -30,38 +30,48 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.edgeai.wearable.data.BadgeLevel
-import com.edgeai.wearable.ui.theme.AccentBlue
-import com.edgeai.wearable.ui.theme.AccentBlueDark
-import com.edgeai.wearable.ui.theme.AccentBlueLight
+import com.edgeai.wearable.ui.theme.AccentTeal
+import com.edgeai.wearable.ui.theme.AccentTealBorder
+import com.edgeai.wearable.ui.theme.AccentTealDark
+import com.edgeai.wearable.ui.theme.AccentTealLight
 import com.edgeai.wearable.ui.theme.BgCard
 import com.edgeai.wearable.ui.theme.BgPage
+import com.edgeai.wearable.ui.theme.BgSoft
 import com.edgeai.wearable.ui.theme.BorderLight
 import com.edgeai.wearable.ui.theme.DangerBg
 import com.edgeai.wearable.ui.theme.DangerBorder
 import com.edgeai.wearable.ui.theme.DangerColor
-import com.edgeai.wearable.ui.theme.InfoBorder
+import com.edgeai.wearable.ui.theme.GridColor
+import com.edgeai.wearable.ui.theme.IbmPlexMonoFontFamily
+import com.edgeai.wearable.ui.theme.ManropeFontFamily
 import com.edgeai.wearable.ui.theme.NeutralBg
+import com.edgeai.wearable.ui.theme.NeutralBorder
+import com.edgeai.wearable.ui.theme.NeutralColor
 import com.edgeai.wearable.ui.theme.OkBg
 import com.edgeai.wearable.ui.theme.OkBorder
 import com.edgeai.wearable.ui.theme.OkColor
@@ -73,46 +83,60 @@ import com.edgeai.wearable.ui.theme.WarnBorder
 import com.edgeai.wearable.ui.theme.WarnColor
 import java.util.Locale
 
+@Immutable
 data class ChartSeries(
     val name: String,
     val color: Color,
     val values: List<Float?>,
+    val fillArea: Boolean = false,
 )
 
+@Immutable
 data class ChartReferenceLine(
     val value: Float,
     val color: Color,
     val label: String? = null,
 )
 
-@Composable
 fun badgeColors(level: BadgeLevel): Triple<Color, Color, Color> = when (level) {
     BadgeLevel.OK -> Triple(OkBg, OkColor, OkBorder)
     BadgeLevel.WARN -> Triple(WarnBg, WarnColor, WarnBorder)
     BadgeLevel.DANGER -> Triple(DangerBg, DangerColor, DangerBorder)
-    BadgeLevel.INFO -> Triple(AccentBlueLight, AccentBlueDark, InfoBorder)
-    BadgeLevel.NEUTRAL -> Triple(NeutralBg, TextSecondary, BorderLight)
+    BadgeLevel.INFO -> Triple(AccentTealLight, AccentTealDark, AccentTealBorder)
+    BadgeLevel.NEUTRAL -> Triple(NeutralBg, NeutralColor, NeutralBorder)
 }
 
 @Composable
 fun StatusBadge(
     text: String,
     level: BadgeLevel,
+    showDot: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val (bg, fg, border) = badgeColors(level)
-    Box(
+    Row(
         modifier = modifier
             .clip(RoundedCornerShape(999.dp))
             .background(bg)
             .border(1.dp, border, RoundedCornerShape(999.dp))
-            .padding(horizontal = 10.dp, vertical = 3.dp)
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
+        if (showDot) {
+            Box(
+                modifier = Modifier
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(fg)
+            )
+        }
         Text(
             text = text,
             color = fg,
+            fontFamily = ManropeFontFamily,
             fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -128,15 +152,97 @@ fun ClinicalCard(
     val cardMod = if (onClick != null) modifier.clickable { onClick() } else modifier
     Card(
         modifier = cardMod.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = BgCard),
         border = BorderStroke(1.dp, BorderLight),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(18.dp),
             content = content,
         )
+    }
+}
+
+@Composable
+fun StatusHeroCard(
+    eyebrow: String,
+    title: String,
+    description: String,
+    level: BadgeLevel,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+) {
+    val (bg, tone, border) = badgeColors(level)
+    val gradient = remember(bg) {
+        Brush.horizontalGradient(
+            colorStops = arrayOf(
+                0.0f to bg,
+                0.85f to BgCard,
+            )
+        )
+    }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(gradient)
+            .border(1.dp, border, RoundedCornerShape(18.dp))
+            .padding(horizontal = 18.dp, vertical = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        // Circular tone icon with soft 14% halo ring (exact .status-hero-icon)
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(tone.copy(alpha = 0.14f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(tone),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = title,
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = eyebrow.uppercase(Locale.US),
+                fontFamily = ManropeFontFamily,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.1.sp,
+                color = tone,
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = title,
+                fontFamily = ManropeFontFamily,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = (-0.4).sp,
+                color = TextPrimary,
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = description,
+                fontFamily = ManropeFontFamily,
+                fontSize = 12.sp,
+                color = TextSecondary,
+                lineHeight = 17.sp,
+            )
+        }
     }
 }
 
@@ -147,11 +253,12 @@ fun SectionTitle(
 ) {
     Text(
         text = text.uppercase(Locale.US),
+        fontFamily = ManropeFontFamily,
         color = TextMuted,
         fontSize = 11.sp,
         fontWeight = FontWeight.Bold,
-        letterSpacing = 0.8.sp,
-        modifier = modifier.padding(top = 8.dp, bottom = 6.dp),
+        letterSpacing = 1.1.sp,
+        modifier = modifier.padding(top = 6.dp, bottom = 4.dp, start = 2.dp),
     )
 }
 
@@ -159,23 +266,35 @@ fun SectionTitle(
 fun AlertBanner(
     text: String,
     level: BadgeLevel,
+    icon: ImageVector? = null,
     modifier: Modifier = Modifier,
 ) {
     val (bg, fg, border) = badgeColors(level)
-    Box(
+    Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(bg)
-            .border(1.dp, border, RoundedCornerShape(10.dp))
-            .padding(horizontal = 12.dp, vertical = 10.dp)
+            .border(1.dp, border, RoundedCornerShape(14.dp))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = fg,
+                modifier = Modifier.size(18.dp),
+            )
+        }
         Text(
             text = text,
+            fontFamily = ManropeFontFamily,
             color = fg,
             fontSize = 12.sp,
             lineHeight = 17.sp,
-            fontWeight = FontWeight.Medium,
+            fontWeight = FontWeight.SemiBold,
         )
     }
 }
@@ -187,8 +306,10 @@ fun StatTile(
     unit: String = "",
     sub: String? = null,
     subBadge: BadgeLevel? = null,
-    accentColor: Color = AccentBlue,
+    accentColor: Color = AccentTeal,
+    icon: ImageVector? = null,
     livePulse: Boolean = false,
+    monoValue: Boolean = false,
     onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -198,7 +319,7 @@ fun StatTile(
             initialValue = 1f,
             targetValue = 0.25f,
             animationSpec = infiniteRepeatable(
-                animation = tween(700),
+                animation = tween(750),
                 repeatMode = RepeatMode.Reverse,
             ),
             label = "pulseAlpha",
@@ -209,77 +330,156 @@ fun StatTile(
     val cardMod = if (onClick != null) modifier.clickable { onClick() } else modifier
     Card(
         modifier = cardMod,
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = BgCard),
         border = BorderStroke(1.dp, BorderLight),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+            Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 12.dp)) {
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    if (livePulse) {
-                        Box(
-                            modifier = Modifier
-                                .size(7.dp)
-                                .alpha(pulseAlpha)
-                                .clip(CircleShape)
-                                .background(accentColor)
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        if (livePulse) {
+                            Box(
+                                modifier = Modifier
+                                    .size(7.dp)
+                                    .alpha(pulseAlpha)
+                                    .clip(CircleShape)
+                                    .background(accentColor)
+                            )
+                        }
+                        Text(
+                            text = label,
+                            fontFamily = ManropeFontFamily,
+                            color = TextSecondary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    Text(
-                        text = label,
-                        color = TextSecondary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    if (icon != null) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(accentColor.copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = label,
+                                tint = accentColor,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                    }
                 }
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.Bottom) {
                     Text(
                         text = value,
                         color = TextPrimary,
-                        fontSize = 22.sp,
+                        fontSize = if (monoValue) 22.sp else 26.sp,
                         fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = if (monoValue) IbmPlexMonoFontFamily else ManropeFontFamily,
+                        letterSpacing = (-0.6).sp,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     if (unit.isNotEmpty()) {
-                        Spacer(modifier = Modifier.width(3.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = unit,
+                            fontFamily = ManropeFontFamily,
                             color = TextMuted,
                             fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.padding(bottom = 2.dp),
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(bottom = 3.dp),
                         )
                     }
                 }
                 if (sub != null) {
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     if (subBadge != null) {
                         StatusBadge(text = sub, level = subBadge)
                     } else {
                         Text(
                             text = sub,
+                            fontFamily = ManropeFontFamily,
                             color = TextMuted,
                             fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
             }
+            // Subtle inset bottom bar matching .stat-tile::after
             Box(
                 modifier = Modifier
+                    .padding(horizontal = 18.dp)
                     .fillMaxWidth()
                     .height(3.dp)
-                    .background(accentColor)
+                    .clip(RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp))
+                    .background(accentColor.copy(alpha = 0.85f))
             )
+        }
+    }
+}
+
+@Composable
+fun RawSensorCell(
+    label: String,
+    value: String,
+    unit: String = "",
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(BgSoft)
+            .border(1.dp, BorderLight, RoundedCornerShape(12.dp))
+            .padding(vertical = 10.dp, horizontal = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = label.uppercase(Locale.US),
+            fontFamily = ManropeFontFamily,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.6.sp,
+            color = TextMuted,
+            maxLines = 1,
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(
+                text = value,
+                fontFamily = IbmPlexMonoFontFamily,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary,
+                maxLines = 1,
+            )
+            if (unit.isNotEmpty() && value != "--") {
+                Spacer(modifier = Modifier.width(2.dp))
+                Text(
+                    text = unit,
+                    fontFamily = ManropeFontFamily,
+                    fontSize = 10.sp,
+                    color = TextMuted,
+                )
+            }
         }
     }
 }
@@ -301,42 +501,42 @@ fun GaugeBar(
     }
     val formattedVal = if (value == null || value.isNaN()) "--" else String.format(Locale.US, "%.${digits}f", value)
 
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text(label, fontSize = 12.sp, color = TextSecondary)
+            Text(label, fontFamily = ManropeFontFamily, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary)
             Text(
                 text = "$formattedVal $unit",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = IbmPlexMonoFontFamily,
                 color = TextPrimary,
             )
         }
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(5.dp))
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(8.dp)
-                .clip(RoundedCornerShape(4.dp))
+                .clip(RoundedCornerShape(999.dp))
                 .background(BgPage)
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth(pct)
                     .fillMaxHeight()
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(RoundedCornerShape(999.dp))
                     .background(color)
             )
         }
         Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 3.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text(min.toInt().toString(), fontSize = 10.sp, color = TextMuted)
-            Text("${max.toInt()} $unit", fontSize = 10.sp, color = TextMuted)
+            Text(min.toInt().toString(), fontFamily = IbmPlexMonoFontFamily, fontSize = 10.sp, color = TextMuted)
+            Text("${max.toInt()} $unit", fontFamily = IbmPlexMonoFontFamily, fontSize = 10.sp, color = TextMuted)
         }
     }
 }
@@ -352,67 +552,103 @@ fun KeyValueRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 7.dp),
+                .padding(vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 text = label,
+                fontFamily = ManropeFontFamily,
                 fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
                 color = TextSecondary,
             )
             Text(
                 text = value,
                 fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                fontFamily = if (mono) FontFamily.Monospace else FontFamily.Default,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = if (mono) IbmPlexMonoFontFamily else ManropeFontFamily,
                 color = TextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
         if (showDivider) {
-            HorizontalDivider(color = BorderLight, thickness = 0.7.dp)
+            HorizontalDivider(color = BorderLight, thickness = 0.8.dp)
         }
     }
 }
 
+/**
+ * Area-filled ECG sparkline matching Overview.js (.ecg-well + AreaChart gradient).
+ * Reuses Path instances to keep 10 Hz live drawing allocation-free.
+ */
 @Composable
-fun SparklineChart(
+fun SparklineAreaChart(
     values: List<Float>,
     color: Color,
-    height: Dp = 76.dp,
+    height: Dp = 110.dp,
     modifier: Modifier = Modifier,
 ) {
-    if (values.size < 2) {
-        Box(
-            modifier = modifier.fillMaxWidth().height(height),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("Waiting for live signal…", fontSize = 12.sp, color = TextMuted)
-        }
-        return
-    }
+    val linePath = remember { Path() }
+    val fillPath = remember { Path() }
+    val strokeStyle = remember { Stroke(width = 4f, cap = StrokeCap.Round, join = StrokeJoin.Round) }
 
-    Canvas(modifier = modifier.fillMaxWidth().height(height)) {
-        val minV = values.minOrNull() ?: 0f
-        val maxV = values.maxOrNull() ?: 1f
-        val range = (maxV - minV).let { if (it < 1f) 1f else it }
-        val pad = 6f
-        val usableH = (size.height - pad * 2).coerceAtLeast(1f)
-        val stepX = size.width / (values.size - 1).coerceAtLeast(1)
-
-        val path = Path()
-        values.forEachIndexed { idx, v ->
-            val x = idx * stepX
-            val y = size.height - pad - ((v - minV) / range) * usableH
-            if (idx == 0) path.moveTo(x, y) else path.lineTo(x, y)
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(height)
+            .clip(RoundedCornerShape(12.dp))
+            .background(BgSoft)
+            .border(1.dp, BorderLight, RoundedCornerShape(12.dp))
+            .padding(horizontal = 4.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (values.size < 2) {
+            Text("Waiting for live signal…", fontFamily = ManropeFontFamily, fontSize = 12.sp, color = TextMuted)
+            return@Box
         }
-        drawPath(
-            path = path,
-            color = color,
-            style = Stroke(width = 3.5f, cap = StrokeCap.Round, join = StrokeJoin.Round),
-        )
+
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            var minV = Float.POSITIVE_INFINITY
+            var maxV = Float.NEGATIVE_INFINITY
+            for (v in values) {
+                if (v < minV) minV = v
+                if (v > maxV) maxV = v
+            }
+            val range = (maxV - minV).let { if (it < 1f) 1f else it }
+            val pad = 8f
+            val usableH = (size.height - pad * 2).coerceAtLeast(1f)
+            val stepX = size.width / (values.size - 1).coerceAtLeast(1)
+
+            linePath.reset()
+            fillPath.reset()
+
+            values.forEachIndexed { idx, v ->
+                val x = idx * stepX
+                val y = size.height - pad - ((v - minV) / range) * usableH
+                if (idx == 0) {
+                    linePath.moveTo(x, y)
+                    fillPath.moveTo(x, size.height)
+                    fillPath.lineTo(x, y)
+                } else {
+                    linePath.lineTo(x, y)
+                    fillPath.lineTo(x, y)
+                }
+            }
+            fillPath.lineTo(size.width, size.height)
+            fillPath.close()
+
+            drawPath(
+                path = fillPath,
+                brush = Brush.verticalGradient(
+                    colors = listOf(color.copy(alpha = 0.26f), color.copy(alpha = 0.0f)),
+                    startY = 0f,
+                    endY = size.height,
+                ),
+            )
+            drawPath(path = linePath, color = color, style = strokeStyle)
+        }
     }
 }
 
@@ -423,29 +659,66 @@ fun LineChartCard(
     subtitle: String? = null,
     series: List<ChartSeries>,
     referenceLines: List<ChartReferenceLine> = emptyList(),
-    chartHeight: Dp = 180.dp,
+    chartHeight: Dp = 190.dp,
     emptyMessage: String = "Collecting data… Keep device connected.",
 ) {
-    val allValues = series.flatMap { s -> s.values.filterNotNull() } + referenceLines.map { it.value }
-    val hasEnoughData = series.any { s -> s.values.count { it != null } >= 2 }
+    val linePath = remember { Path() }
+    val fillPath = remember { Path() }
+    val strokeStyle = remember { Stroke(width = 4f, cap = StrokeCap.Round, join = StrokeJoin.Round) }
+    val refDash = remember { PathEffect.dashPathEffect(floatArrayOf(10f, 8f), 0f) }
+
+    val hasEnoughData = remember(series) {
+        series.any { s -> s.values.count { it != null } >= 2 }
+    }
 
     ClinicalCard {
-        Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+        Text(
+            title,
+            fontFamily = ManropeFontFamily,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextPrimary,
+        )
         if (subtitle != null) {
-            Text(subtitle, fontSize = 12.sp, color = TextMuted)
+            Text(
+                subtitle,
+                fontFamily = ManropeFontFamily,
+                fontSize = 12.sp,
+                color = TextMuted,
+            )
         }
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        if (!hasEnoughData || allValues.isEmpty()) {
+        if (!hasEnoughData) {
             Box(
-                modifier = Modifier.fillMaxWidth().height(chartHeight),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(chartHeight)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(BgSoft),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(emptyMessage, fontSize = 12.sp, color = TextMuted)
+                Text(emptyMessage, fontFamily = ManropeFontFamily, fontSize = 12.sp, color = TextMuted)
             }
         } else {
-            val rawMin = allValues.minOrNull() ?: 0f
-            val rawMax = allValues.maxOrNull() ?: 1f
+            var rawMin = Float.POSITIVE_INFINITY
+            var rawMax = Float.NEGATIVE_INFINITY
+            for (s in series) {
+                for (v in s.values) {
+                    if (v != null && !v.isNaN()) {
+                        if (v < rawMin) rawMin = v
+                        if (v > rawMax) rawMax = v
+                    }
+                }
+            }
+            for (r in referenceLines) {
+                if (r.value < rawMin) rawMin = r.value
+                if (r.value > rawMax) rawMax = r.value
+            }
+            if (!rawMin.isFinite() || !rawMax.isFinite()) {
+                rawMin = 0f
+                rawMax = 1f
+            }
             val padRange = ((rawMax - rawMin) * 0.08f).let { if (it < 0.5f) 1f else it }
             val minV = rawMin - padRange
             val maxV = rawMax + padRange
@@ -455,87 +728,91 @@ fun LineChartCard(
                 modifier = Modifier.fillMaxWidth().height(chartHeight),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // Y-axis min/mid/max labels
                 Column(
                     modifier = Modifier.width(44.dp).fillMaxHeight(),
                     verticalArrangement = Arrangement.SpaceBetween,
                     horizontalAlignment = Alignment.End,
                 ) {
-                    Text(
-                        String.format(Locale.US, "%.0f", maxV),
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace,
-                        color = TextMuted,
-                    )
-                    Text(
-                        String.format(Locale.US, "%.0f", (maxV + minV) / 2f),
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace,
-                        color = TextMuted,
-                    )
-                    Text(
-                        String.format(Locale.US, "%.0f", minV),
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace,
-                        color = TextMuted,
-                    )
+                    Text(String.format(Locale.US, "%.0f", maxV), fontSize = 10.sp, fontFamily = IbmPlexMonoFontFamily, color = TextMuted)
+                    Text(String.format(Locale.US, "%.0f", (maxV + minV) / 2f), fontSize = 10.sp, fontFamily = IbmPlexMonoFontFamily, color = TextMuted)
+                    Text(String.format(Locale.US, "%.0f", minV), fontSize = 10.sp, fontFamily = IbmPlexMonoFontFamily, color = TextMuted)
                 }
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(8.dp))
 
                 Canvas(modifier = Modifier.weight(1f).fillMaxSize()) {
-                    val gridEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f), 0f)
+                    // Horizontal-only subtle gridlines (matching global.css --grid)
                     val gridSteps = 4
                     for (i in 0..gridSteps) {
                         val y = size.height * i / gridSteps
                         drawLine(
-                            color = BorderLight,
+                            color = GridColor,
                             start = Offset(0f, y),
                             end = Offset(size.width, y),
-                            strokeWidth = 1.5f,
-                            pathEffect = gridEffect,
+                            strokeWidth = 1.8f,
                         )
                     }
 
-                    // Reference lines
-                    referenceLines.forEach { ref ->
+                    // Dashed reference lines
+                    for (ref in referenceLines) {
                         val y = size.height - ((ref.value - minV) / range) * size.height
                         if (y in 0f..size.height) {
                             drawLine(
-                                color = ref.color.copy(alpha = 0.65f),
+                                color = ref.color.copy(alpha = 0.6f),
                                 start = Offset(0f, y),
                                 end = Offset(size.width, y),
                                 strokeWidth = 2.5f,
-                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f),
+                                pathEffect = refDash,
                             )
                         }
                     }
 
-                    // Data series
-                    series.forEach { s ->
+                    // Series paths
+                    for (s in series) {
                         val count = s.values.size
-                        if (count < 2) return@forEach
+                        if (count < 2) continue
                         val stepX = size.width / (count - 1).coerceAtLeast(1)
-                        val path = Path()
+                        linePath.reset()
+                        fillPath.reset()
                         var started = false
-                        s.values.forEachIndexed { idx, v ->
+                        var firstX = 0f
+                        var lastX = 0f
+
+                        for (idx in 0 until count) {
+                            val v = s.values[idx]
                             if (v == null || v.isNaN()) {
                                 started = false
                             } else {
                                 val x = idx * stepX
                                 val y = size.height - ((v - minV) / range) * size.height
                                 if (!started) {
-                                    path.moveTo(x, y)
+                                    linePath.moveTo(x, y)
+                                    if (s.fillArea) {
+                                        firstX = x
+                                        fillPath.moveTo(x, size.height)
+                                        fillPath.lineTo(x, y)
+                                    }
                                     started = true
                                 } else {
-                                    path.lineTo(x, y)
+                                    linePath.lineTo(x, y)
+                                    if (s.fillArea) fillPath.lineTo(x, y)
                                 }
+                                lastX = x
                             }
                         }
-                        drawPath(
-                            path = path,
-                            color = s.color,
-                            style = Stroke(width = 3.5f, cap = StrokeCap.Round, join = StrokeJoin.Round),
-                        )
+
+                        if (s.fillArea && lastX > firstX) {
+                            fillPath.lineTo(lastX, size.height)
+                            fillPath.close()
+                            drawPath(
+                                path = fillPath,
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(s.color.copy(alpha = 0.22f), s.color.copy(alpha = 0.0f)),
+                                    startY = 0f,
+                                    endY = size.height,
+                                ),
+                            )
+                        }
+                        drawPath(path = linePath, color = s.color, style = strokeStyle)
                     }
                 }
             }
@@ -551,7 +828,7 @@ fun LineChartCard(
                 series.forEach { s ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Box(
                             modifier = Modifier
@@ -560,13 +837,13 @@ fun LineChartCard(
                                 .clip(RoundedCornerShape(2.dp))
                                 .background(s.color)
                         )
-                        Text(s.name, fontSize = 11.sp, color = TextSecondary)
+                        Text(s.name, fontFamily = ManropeFontFamily, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = TextSecondary)
                     }
                 }
                 referenceLines.filter { it.label != null }.forEach { r ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Box(
                             modifier = Modifier
@@ -574,7 +851,7 @@ fun LineChartCard(
                                 .height(2.dp)
                                 .background(r.color.copy(alpha = 0.7f))
                         )
-                        Text(r.label!!, fontSize = 11.sp, color = r.color)
+                        Text(r.label!!, fontFamily = ManropeFontFamily, fontSize = 11.sp, color = r.color)
                     }
                 }
             }

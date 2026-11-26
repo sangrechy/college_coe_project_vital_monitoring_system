@@ -2,46 +2,56 @@ package com.edgeai.wearable.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Clinical / formal dashboard palette matching v2/interface/frontend/src/styles/global.css
-val BgPage = Color(0xFFF5F6F8)
+// Exact calm clinical light theme tokens from v2/interface/frontend/src/styles/global.css
+val BgPage = Color(0xFFF5F3EE)
 val BgCard = Color(0xFFFFFFFF)
-val BgNavy = Color(0xFF1A2332)
-val BgNavyHover = Color(0xFF243044)
-val BgNavyActive = Color(0xFF2E3F58)
+val BgSoft = Color(0xFFFAF8F4)
+val BgNavActive = Color(0xFFE4F1EE)
+val BgNavHover = Color(0xFFF4F2ED)
 
-val TextPrimary = Color(0xFF0F1923)
-val TextSecondary = Color(0xFF4A5568)
-val TextMuted = Color(0xFF8A95A3)
+val TextPrimary = Color(0xFF172224)
+val TextSecondary = Color(0xFF4D5D63)
+val TextMuted = Color(0xFF8A979C)
 val TextInvert = Color(0xFFFFFFFF)
-val TextSidebar = Color(0xFFC8D3E0)
+val TextNav = Color(0xFF4A5A60)
+val TextNavActive = Color(0xFF0A5A53)
 
-val AccentBlue = Color(0xFF2563EB)
-val AccentBlueLight = Color(0xFFDBEAFE)
-val AccentBlueDark = Color(0xFF1D4ED8)
+// Brand (deep teal)
+val AccentTeal = Color(0xFF0F766E)
+val AccentTealLight = Color(0xFFE1F1EE)
+val AccentTealDark = Color(0xFF0A5A53)
+val AccentTealBorder = Color(0xFFB9DCD6)
 
-val OkColor = Color(0xFF16A34A)
-val OkBg = Color(0xFFDCFCE7)
-val OkBorder = Color(0xFF86EFAC)
+// Semantic
+val OkColor = Color(0xFF2B7A4B)
+val OkBg = Color(0xFFE6F2EA)
+val OkBorder = Color(0xFFC3E0CD)
 
-val WarnColor = Color(0xFFD97706)
-val WarnBg = Color(0xFFFEF3C7)
-val WarnBorder = Color(0xFFFCD34D)
+val WarnColor = Color(0xFFA35F0A)
+val WarnBg = Color(0xFFFBF0DB)
+val WarnBorder = Color(0xFFEFD9A6)
 
-val DangerColor = Color(0xFFDC2626)
-val DangerBg = Color(0xFFFEE2E2)
-val DangerBorder = Color(0xFFFCA5A5)
+val DangerColor = Color(0xFFB4352C)
+val DangerBg = Color(0xFFFBEAE8)
+val DangerBorder = Color(0xFFEFC3BE)
 
-val NeutralBg = Color(0xFFF1F5F9)
-val InfoBorder = Color(0xFF93C5FD)
+val NeutralColor = Color(0xFF5D6D73)
+val NeutralBg = Color(0xFFEEEAE3)
+val NeutralBorder = Color(0xFFDCD7CC)
 
-val BorderLight = Color(0xFFE2E8F0)
-val BorderStrong = Color(0xFFCBD5E1)
+val BorderLight = Color(0xFFE9E5DC)
+val BorderStrong = Color(0xFFD6D1C6)
+val GridColor = Color(0xFFEEEAE2)
 
-// ECG & Chart colors
-val EcgRawColor = Color(0xFF2563EB)
-val EcgFiltColor = Color(0xFF16A34A)
-val ChartHrColor = Color(0xFFEF4444)
-val ChartSpo2Color = Color(0xFF0EA5E9)
-val ChartHrvColor = Color(0xFF8B5CF6)
-val ChartTempColor = Color(0xFFF59E0B)
-val ChartMotionColor = Color(0xFF06B6D4)
+// ECG & Charts
+val EcgRawColor = Color(0xFF0F766E)
+val EcgFiltColor = Color(0xFFC2562F)
+
+val ChartHrColor = Color(0xFFD1495B)
+val ChartSpo2Color = Color(0xFF2F80B7)
+val ChartHrvColor = Color(0xFF7B6BB0)
+val ChartTempColor = Color(0xFFD98A29)
+val ChartMotionColor = Color(0xFF3A9A8F)
+
+val StressIconBg = Color(0xFFECE8F5)
+val StressIconFg = Color(0xFF6B5AA6)

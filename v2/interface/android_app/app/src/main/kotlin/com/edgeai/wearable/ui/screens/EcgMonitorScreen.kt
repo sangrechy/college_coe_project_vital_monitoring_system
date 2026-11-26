@@ -10,12 +10,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.edgeai.wearable.data.BadgeLevel
 import com.edgeai.wearable.data.HealthLabels
-import com.edgeai.wearable.ui.WearableUiState
+import com.edgeai.wearable.ui.LiveTelemetryState
 import com.edgeai.wearable.ui.components.AlertBanner
 import com.edgeai.wearable.ui.components.ChartReferenceLine
 import com.edgeai.wearable.ui.components.ChartSeries
@@ -32,10 +34,10 @@ import com.edgeai.wearable.ui.theme.WarnColor
 private const val ECG_THRESHOLD = 1800f
 
 @Composable
-fun EcgMonitorScreen(state: WearableUiState) {
-    val raw = state.latestPacket?.raw
-    val feat = state.latestPacket?.features
-    val ai = state.latestPacket?.ai
+fun EcgMonitorScreen(live: LiveTelemetryState) {
+    val raw = live.latestPacket?.raw
+    val feat = live.latestPacket?.features
+    val ai = live.latestPacket?.ai
     val ecgResult = HealthLabels.getEcgClass(ai?.ecgClass)
 
     val ecgAccent = when (ecgResult.badge) {
@@ -49,34 +51,33 @@ fun EcgMonitorScreen(state: WearableUiState) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        // 2x2 Stat Strip
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             StatTile(
                 label = "Raw ECG",
                 value = raw?.ecg?.toString() ?: "--",
-                unit = "",
                 sub = "ADC counts",
                 accentColor = EcgRawColor,
+                monoValue = true,
                 modifier = Modifier.weight(1f),
             )
             StatTile(
                 label = "Filtered ECG",
                 value = feat?.ecgFilt?.toString() ?: "--",
-                unit = "",
                 sub = "8-pt moving avg",
                 accentColor = EcgFiltColor,
+                monoValue = true,
                 modifier = Modifier.weight(1f),
             )
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             StatTile(
                 label = "RR Interval",
@@ -84,12 +85,12 @@ fun EcgMonitorScreen(state: WearableUiState) {
                 unit = "ms",
                 sub = "HR: ${HealthLabels.round(feat?.hr, 0)} bpm",
                 accentColor = ChartHrvColor,
+                monoValue = true,
                 modifier = Modifier.weight(1f),
             )
             StatTile(
                 label = "ECG Class",
                 value = ecgResult.label,
-                unit = "",
                 sub = ecgResult.label,
                 subBadge = ecgResult.badge,
                 accentColor = ecgAccent,
@@ -97,15 +98,16 @@ fun EcgMonitorScreen(state: WearableUiState) {
             )
         }
 
-        // Raw ECG Live Chart
+        // Raw ECG Area Chart (Deep Teal)
         LineChartCard(
             title = "Raw ECG Signal",
-            subtitle = "AD8232 analog output · last ${state.ecgRawBuffer.size} samples",
+            subtitle = "AD8232 analog output · last ${live.ecgRawBuffer.size} samples",
             series = listOf(
                 ChartSeries(
                     name = "Raw ADC",
                     color = EcgRawColor,
-                    values = state.ecgRawBuffer.map { it },
+                    values = live.ecgRawBuffer,
+                    fillArea = true,
                 )
             ),
             referenceLines = listOf(
@@ -115,29 +117,31 @@ fun EcgMonitorScreen(state: WearableUiState) {
                     label = "Threshold (1800)",
                 )
             ),
-            chartHeight = 190.dp,
+            chartHeight = 200.dp,
             emptyMessage = "Waiting for live AD8232 ECG samples…",
         )
 
-        // Filtered ECG Live Chart
+        // Filtered ECG Area Chart (Warm Terracotta)
         LineChartCard(
             title = "Filtered ECG Signal",
             subtitle = "After 8-point moving average filter (firmware-side)",
             series = listOf(
                 ChartSeries(
-                    name = "Filtered ECG",
+                    name = "Filtered",
                     color = EcgFiltColor,
-                    values = state.ecgFiltBuffer.map { it },
+                    values = live.ecgFiltBuffer,
+                    fillArea = true,
                 )
             ),
-            chartHeight = 190.dp,
+            chartHeight = 200.dp,
             emptyMessage = "Waiting for filtered ECG samples…",
         )
 
         AlertBanner(
-            text = "Firmware DSP: 8-point moving average (ECG_FILTER_SIZE=8), peak detection above threshold 1800 with a 300 ms refractory period. Valid RR intervals: 300–2000 ms.",
+            text = "Firmware DSP uses an 8-point moving average (ECG_FILTER_SIZE=8) and detects peaks above threshold 1800 with a 300 ms refractory period. Valid RR: 300–2000 ms.",
             level = BadgeLevel.INFO,
+            icon = Icons.Rounded.Info,
         )
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(10.dp))
     }
 }

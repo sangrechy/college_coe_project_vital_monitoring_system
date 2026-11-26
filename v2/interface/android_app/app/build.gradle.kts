@@ -9,7 +9,7 @@ android {
   compileSdk = 36
   defaultConfig {
     applicationId = "com.edgeai.wearable"
-    minSdk = 26
+    minSdk = 24
     targetSdk = 36
     versionCode = 1
     versionName = "1.0"

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { formatUptime, badgeClass } from '../../utils/labels';
+import Icon from '../shared/Icon';
 
 export default function DeviceStatus({
   bleConnected, bleDeviceName, bleDeviceAddress,
@@ -70,13 +71,14 @@ export default function DeviceStatus({
       <div className="page-body">
 
         {message && (
-          <div className={`alert alert-${message.type}`} style={{ marginBottom: 16 }}>
-            {message.text}
+          <div className={`alert alert-${message.type}`} style={{ marginBottom: 20 }}>
+            <Icon name={message.type === 'ok' ? 'check' : message.type === 'info' ? 'info' : 'alert'} size={18} />
+            <span>{message.text}</span>
           </div>
         )}
 
         {/* Connection status card */}
-        <div className="grid-2" style={{ marginBottom: 20 }}>
+        <div className="grid-2" style={{ marginBottom: 24 }}>
           <div className="card">
             <div className="card-header">
               <div className="card-title">BLE Connection</div>
@@ -113,7 +115,7 @@ export default function DeviceStatus({
             <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
               {!bleConnected ? (
                 <button className="btn btn-primary" onClick={handleConnect} disabled={connecting}>
-                  {connecting ? 'Connecting…' : '⊙ Connect'}
+                  {connecting ? 'Connecting…' : <><Icon name="bluetooth" size={16} /> Connect</>}
                 </button>
               ) : (
                 <button className="btn btn-outline" onClick={handleDisconnect}>
@@ -157,14 +159,14 @@ export default function DeviceStatus({
         </div>
 
         {/* BLE Scanner */}
-        <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card" style={{ marginBottom: 24 }}>
           <div className="card-header">
             <div className="card-title">BLE Device Scanner</div>
             <div className="card-subtitle">Scan for nearby BLE devices and connect by address</div>
           </div>
           <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
             <button className="btn btn-outline" onClick={handleScan} disabled={scanning}>
-              {scanning ? 'Scanning (10s)…' : '⊙ Scan for Devices'}
+              {scanning ? 'Scanning (10s)…' : <><Icon name="bluetooth" size={16} /> Scan for Devices</>}
             </button>
             {devices.length > 0 && (
               <>
@@ -193,12 +195,12 @@ export default function DeviceStatus({
             )}
           </div>
           {devices.length > 0 && (
-            <div style={{ fontSize: '0.82rem' }}>
-              <div style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+            <div>
+              <div className="found-count">
                 {devices.length} device{devices.length !== 1 ? 's' : ''} found:
               </div>
               {devices.map(d => (
-                <div key={d.address} className="status-row" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>
+                <div key={d.address} className="status-row device-row">
                   <span>{d.name || 'Unknown Device'}</span>
                   <span style={{ color: 'var(--text-muted)' }}>{d.address}</span>
                   {d.rssi != null && <span style={{ color: 'var(--text-muted)' }}>{d.rssi} dBm</span>}
@@ -213,7 +215,7 @@ export default function DeviceStatus({
           <div className="card-header">
             <div className="card-title">ESP32 Configuration Reference</div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0 24px', fontSize: '0.82rem' }}>
+          <div className="config-grid">
             {[
               ['Device Name',      'EdgeAI_Wearable'],
               ['Service UUID',     '12345678-1234-1234-1234-123456789001'],

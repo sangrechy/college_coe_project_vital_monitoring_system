@@ -4,20 +4,20 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 
-private val ClinicalColorScheme = lightColorScheme(
-    primary = AccentBlue,
+private val CalmClinicalColorScheme = lightColorScheme(
+    primary = AccentTeal,
     onPrimary = TextInvert,
-    primaryContainer = AccentBlueLight,
-    onPrimaryContainer = AccentBlueDark,
-    secondary = BgNavy,
+    primaryContainer = AccentTealLight,
+    onPrimaryContainer = AccentTealDark,
+    secondary = TextPrimary,
     onSecondary = TextInvert,
-    secondaryContainer = BgNavyActive,
-    onSecondaryContainer = TextInvert,
+    secondaryContainer = BgNavActive,
+    onSecondaryContainer = TextNavActive,
     background = BgPage,
     onBackground = TextPrimary,
     surface = BgCard,
     onSurface = TextPrimary,
-    surfaceVariant = NeutralBg,
+    surfaceVariant = BgSoft,
     onSurfaceVariant = TextSecondary,
     outline = BorderLight,
     outlineVariant = BorderStrong,
@@ -32,7 +32,7 @@ fun EdgeAIWearableTheme(
     content: @Composable () -> Unit,
 ) {
     MaterialTheme(
-        colorScheme = ClinicalColorScheme,
+        colorScheme = CalmClinicalColorScheme,
         typography = Typography,
         content = content,
     )

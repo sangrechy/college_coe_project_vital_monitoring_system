@@ -1,70 +1,43 @@
 import { getECGClass, getStressClass, getStatus, badgeClass } from '../../utils/labels';
+import Icon from '../shared/Icon';
 
 function ClassCard({ icon, iconBg, label, result, code, codeLabel }) {
   const colorMap = {
-    ok:      { bg: 'var(--ok-bg)',      border: '#86efac', icon: '#16a34a' },
-    warn:    { bg: 'var(--warn-bg)',    border: '#fcd34d', icon: '#d97706' },
-    danger:  { bg: 'var(--danger-bg)', border: '#fca5a5', icon: '#dc2626' },
-    neutral: { bg: '#f1f5f9',          border: 'var(--border)', icon: 'var(--text-muted)' },
-    info:    { bg: 'var(--accent-light)', border: '#93c5fd', icon: 'var(--accent)' },
+    ok:      { bg: 'var(--ok-bg)',      border: '#c3e0cd', icon: '#2f7d4f' },
+    warn:    { bg: 'var(--warn-bg)',    border: '#efd9a6', icon: '#a8610a' },
+    danger:  { bg: 'var(--danger-bg)', border: '#efc3be', icon: '#b4352c' },
+    neutral: { bg: '#efece6',          border: 'var(--border)', icon: 'var(--text-muted)' },
+    info:    { bg: 'var(--accent-light)', border: '#b9dcd6', icon: 'var(--accent)' },
   };
   const colors = colorMap[result.badge] || colorMap.neutral;
 
   return (
-    <div style={{
-      background: colors.bg,
-      border: `1px solid ${colors.border}`,
-      borderRadius: 'var(--radius-lg)',
-      padding: '24px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 12,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-        <div style={{
-          width: 44, height: 44,
-          background: iconBg,
-          borderRadius: 'var(--radius)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '1.2rem', flexShrink: 0,
-        }}>
-          {icon}
-        </div>
-        <div>
-          <div style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: colors.icon, opacity: 0.8 }}>
-            {label}
-          </div>
-          <div style={{ fontSize: '1.6rem', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.2, marginTop: 2 }}>
-            {result.label}
-          </div>
-        </div>
-        <span className={badgeClass(result.badge)} style={{ marginLeft: 'auto' }}>
-          Code {code}
-        </span>
+    <div className="class-card" style={{ background: colors.bg, borderColor: colors.border }}>
+      <div className="class-card-icon" style={{ color: colors.icon }}>
+        {icon}
       </div>
-      <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
-        {result.desc}
-      </p>
+      <div className="class-card-body">
+        <div className="class-card-label" style={{ color: colors.icon }}>
+          {label}
+        </div>
+        <div className="class-card-title">
+          {result.label}
+        </div>
+        <p className="class-card-desc">
+          {result.desc}
+        </p>
+      </div>
+      <span className={badgeClass(result.badge)}>
+        Code {code}
+      </span>
     </div>
   );
 }
 
 function ConfidenceBar({ label, active }) {
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 10,
-      padding: '8px 12px',
-      background: active ? 'var(--accent-light)' : 'var(--bg-page)',
-      border: `1px solid ${active ? '#93c5fd' : 'var(--border)'}`,
-      borderRadius: 'var(--radius)',
-      fontSize: '0.82rem',
-      color: active ? 'var(--accent-dark)' : 'var(--text-muted)',
-    }}>
-      <span style={{
-        width: 8, height: 8, borderRadius: '50%',
-        background: active ? 'var(--accent)' : 'var(--border-strong)',
-        flexShrink: 0,
-      }} />
+    <div className={`legend-row${active ? ' active' : ''}`}>
+      <span className="legend-row-dot" />
       {label}
     </div>
   );
@@ -94,8 +67,8 @@ export default function AIResults({ ai }) {
       <div className="page-body">
 
         {/* Info banner */}
-        <div className="alert alert-info" style={{ marginBottom: 20 }}>
-          <span>ℹ</span>
+        <div className="alert alert-info" style={{ marginBottom: 24 }}>
+          <Icon name="info" size={18} />
           <span>
             All inference runs entirely on the ESP32-S3. The laptop only displays the decoded results.
             Three AI models run on-device: <strong>ecg_predict</strong>, <strong>stress_predict</strong>, and <strong>fusion_predict</strong>.
@@ -103,24 +76,24 @@ export default function AIResults({ ai }) {
         </div>
 
         {/* Three result cards */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 20 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24 }}>
           <ClassCard
-            icon="〜"
+            icon={<Icon name="pulse" size={22} />}
             iconBg="var(--accent-light)"
             label="ECG Classification · ecg_predict()"
             result={ecgResult}
             code={ecg_class}
           />
           <ClassCard
-            icon="◈"
-            iconBg="#ede9fe"
+            icon={<Icon name="bolt" size={22} />}
+            iconBg="#ece8f5"
             label="Stress Level · stress_predict()"
             result={stressResult}
             code={stress_class}
           />
           <ClassCard
-            icon="⊕"
-            iconBg="#fef3c7"
+            icon={<Icon name="chip" size={22} />}
+            iconBg="#fbf1de"
             label="Fusion Status · fusion_predict()"
             result={statusResult}
             code={status}
@@ -134,7 +107,7 @@ export default function AIResults({ ai }) {
               <div className="card-title">ECG Model Inputs</div>
               <div className="card-subtitle">ecg_predict(rr, peak_amp, beat_std, beat_energy)</div>
             </div>
-            <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.8 }}>
+            <div>
               <div className="status-row"><span className="status-label">RR Interval</span><span className="status-value mono">features.rr</span></div>
               <div className="status-row"><span className="status-label">Peak Amplitude</span><span className="status-value mono">peak_amp (rolling max)</span></div>
               <div className="status-row"><span className="status-label">Beat Std Dev</span><span className="status-value mono">beat_std (EMA)</span></div>
@@ -146,7 +119,7 @@ export default function AIResults({ ai }) {
               <div className="card-title">Stress Model Inputs</div>
               <div className="card-subtitle">stress_predict(hr, hrv, temp, motion)</div>
             </div>
-            <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.8 }}>
+            <div>
               <div className="status-row"><span className="status-label">Heart Rate</span><span className="status-value mono">features.hr</span></div>
               <div className="status-row"><span className="status-label">HRV</span><span className="status-value mono">features.hrv</span></div>
               <div className="status-row"><span className="status-label">Body Temperature</span><span className="status-value mono">raw.temp (MLX90614)</span></div>
@@ -156,10 +129,10 @@ export default function AIResults({ ai }) {
         </div>
 
         {/* Class legend */}
-        <div className="grid-2" style={{ marginTop: 16 }}>
+        <div className="grid-2" style={{ marginTop: 20 }}>
           <div className="card">
             <div className="card-header"><div className="card-title">ECG Class Legend</div></div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div className="legend-list">
               <ConfidenceBar label="0 → Normal — Regular cardiac rhythm" active={ecg_class === 0} />
               <ConfidenceBar label="1 → Arrhythmia — Irregular pattern detected" active={ecg_class === 1} />
               <ConfidenceBar label="2 → Unknown — Insufficient data" active={ecg_class === 2} />
@@ -167,7 +140,7 @@ export default function AIResults({ ai }) {
           </div>
           <div className="card">
             <div className="card-header"><div className="card-title">Stress Class Legend</div></div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div className="legend-list">
               <ConfidenceBar label="0 → Low — Physiological indicators normal" active={stress_class === 0} />
               <ConfidenceBar label="1 → Medium — Elevated stress markers" active={stress_class === 1} />
               <ConfidenceBar label="2 → High — High stress physiological state" active={stress_class === 2} />

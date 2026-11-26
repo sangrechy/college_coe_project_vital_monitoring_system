@@ -3,6 +3,8 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
+import Icon from '../shared/Icon';
+import ChartTooltip from '../shared/ChartTooltip';
 
 const API_URL = 'http://localhost:8000';
 
@@ -14,22 +16,6 @@ const WINDOWS = [
 ];
 
 function TrendChart({ title, subtitle, data, lines, height = 200 }) {
-  const CustomTooltip = ({ active, payload }) => {
-    if (!active || !payload?.length) return null;
-    return (
-      <div style={{
-        background: 'var(--bg-card)', border: '1px solid var(--border)',
-        borderRadius: 6, padding: '8px 12px', fontSize: '0.78rem'
-      }}>
-        {payload.map(p => (
-          <div key={p.dataKey} style={{ color: p.color }}>
-            {p.name}: <strong>{typeof p.value === 'number' ? p.value.toFixed(1) : p.value}</strong>
-          </div>
-        ))}
-      </div>
-    );
-  };
-
   return (
     <div className="card">
       <div className="card-header">
@@ -37,18 +23,25 @@ function TrendChart({ title, subtitle, data, lines, height = 200 }) {
           <div className="card-title">{title}</div>
           {subtitle && <div className="card-subtitle">{subtitle}</div>}
         </div>
+        <div className="legend">
+          {lines.map(l => (
+            <div key={l.key} className="legend-item">
+              <span className="legend-swatch" style={{ background: l.color }} />{l.name}
+            </div>
+          ))}
+        </div>
       </div>
       {data.length < 2 ? (
-        <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '40px 0', fontSize: '0.85rem' }}>
+        <div className="empty-state">
           Not enough data yet. Keep the device connected to accumulate history.
         </div>
       ) : (
         <ResponsiveContainer width="100%" height={height}>
           <LineChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
-            <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
+            <CartesianGrid stroke="var(--grid)" vertical={false} />
             <XAxis dataKey="idx" hide />
-            <YAxis width={45} tick={{ fontSize: 11, fontFamily: 'var(--font-mono)' }} />
-            <Tooltip content={<CustomTooltip />} />
+            <YAxis width={45} domain={['auto', 'auto']} axisLine={false} tickLine={false} tick={{ fontSize: 11, fontFamily: 'var(--font-mono)' }} />
+            <Tooltip content={<ChartTooltip digits={1} />} cursor={{ stroke: 'var(--border-strong)', strokeWidth: 1 }} />
             {lines.map(l => (
               <Line
                 key={l.key}
@@ -56,7 +49,7 @@ function TrendChart({ title, subtitle, data, lines, height = 200 }) {
                 dataKey={l.key}
                 name={l.name}
                 stroke={l.color}
-                strokeWidth={1.5}
+                strokeWidth={2.2}
                 dot={false}
                 isAnimationActive={false}
               />
@@ -103,26 +96,28 @@ export default function HistoricalTrends() {
           <p>Time-series data from local SQLite database</p>
         </div>
         <div className="header-right">
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Window:</span>
-          {WINDOWS.map(w => (
-            <button
-              key={w.value}
-              className={`btn btn-sm ${window === w.value ? 'btn-primary' : 'btn-outline'}`}
-              onClick={() => setWindow(w.value)}
-            >
-              {w.label}
-            </button>
-          ))}
+          <span className="header-stat">Window</span>
+          <div className="segmented">
+            {WINDOWS.map(w => (
+              <button
+                key={w.value}
+                className={`segmented-btn${window === w.value ? ' active' : ''}`}
+                onClick={() => setWindow(w.value)}
+              >
+                {w.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       <div className="page-body">
 
         {loading && (
-          <div className="alert alert-info" style={{ marginBottom: 12 }}>Loading data…</div>
+          <div className="alert alert-info" style={{ marginBottom: 12 }}><Icon name="refresh" size={18} />Loading data…</div>
         )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
           {/* ECG trend */}
           <TrendChart
@@ -178,11 +173,11 @@ export default function HistoricalTrends() {
 
         </div>
 
-        <div style={{ marginTop: 16 }}>
+        <div className="refresh-row">
           <button className="btn btn-outline" onClick={load}>
-            ↺ Refresh now
+            <Icon name="refresh" size={16} /> Refresh now
           </button>
-          <span style={{ marginLeft: 12, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+          <span className="refresh-note">
             Auto-refreshes every 10 seconds · {vitals.length} vitals records · {ecg.length} ECG records
           </span>
         </div>

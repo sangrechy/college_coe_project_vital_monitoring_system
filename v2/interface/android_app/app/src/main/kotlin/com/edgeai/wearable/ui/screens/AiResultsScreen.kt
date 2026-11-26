@@ -16,38 +16,47 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Memory
+import androidx.compose.material.icons.rounded.MonitorHeart
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.edgeai.wearable.data.BadgeLevel
 import com.edgeai.wearable.data.HealthLabels
 import com.edgeai.wearable.data.LabelInfo
-import com.edgeai.wearable.ui.WearableUiState
+import com.edgeai.wearable.ui.LiveTelemetryState
 import com.edgeai.wearable.ui.components.AlertBanner
 import com.edgeai.wearable.ui.components.ClinicalCard
 import com.edgeai.wearable.ui.components.KeyValueRow
 import com.edgeai.wearable.ui.components.StatusBadge
 import com.edgeai.wearable.ui.components.badgeColors
-import com.edgeai.wearable.ui.theme.AccentBlue
-import com.edgeai.wearable.ui.theme.AccentBlueDark
-import com.edgeai.wearable.ui.theme.AccentBlueLight
-import com.edgeai.wearable.ui.theme.BgPage
+import com.edgeai.wearable.ui.theme.AccentTeal
+import com.edgeai.wearable.ui.theme.AccentTealBorder
+import com.edgeai.wearable.ui.theme.AccentTealDark
+import com.edgeai.wearable.ui.theme.AccentTealLight
+import com.edgeai.wearable.ui.theme.BgCard
+import com.edgeai.wearable.ui.theme.BgSoft
 import com.edgeai.wearable.ui.theme.BorderLight
 import com.edgeai.wearable.ui.theme.BorderStrong
-import com.edgeai.wearable.ui.theme.InfoBorder
+import com.edgeai.wearable.ui.theme.ManropeFontFamily
 import com.edgeai.wearable.ui.theme.TextMuted
 import com.edgeai.wearable.ui.theme.TextPrimary
 import com.edgeai.wearable.ui.theme.TextSecondary
 
 @Composable
-fun AiResultsScreen(state: WearableUiState) {
-    val ai = state.latestPacket?.ai
+fun AiResultsScreen(live: LiveTelemetryState) {
+    val ai = live.latestPacket?.ai
     val ecgCode = ai?.ecgClass ?: -1
     val stressCode = ai?.stressClass ?: -1
     val statusCode = ai?.status ?: -1
@@ -60,44 +69,38 @@ fun AiResultsScreen(state: WearableUiState) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         AlertBanner(
-            text = "All inference runs on-device on the ESP32-S3. Three embedded Random Forest / fusion models run locally: ecg_predict(), stress_predict(), and fusion_predict().",
+            text = "All inference runs entirely on the ESP32-S3. Three models run on-device: ecg_predict(), stress_predict(), and fusion_predict().",
             level = BadgeLevel.INFO,
+            icon = Icons.Rounded.Info,
         )
 
         AiClassCard(
-            iconText = "〜",
-            iconBg = AccentBlueLight,
-            iconFg = AccentBlueDark,
+            icon = Icons.Rounded.MonitorHeart,
             label = "ECG CLASSIFICATION · ecg_predict()",
             result = ecgResult,
             code = ecgCode,
         )
         AiClassCard(
-            iconText = "◈",
-            iconBg = Color(0xFFEDE9FE),
-            iconFg = Color(0xFF6D28D9),
+            icon = Icons.Rounded.Bolt,
             label = "STRESS LEVEL · stress_predict()",
             result = stressResult,
             code = stressCode,
         )
         AiClassCard(
-            iconText = "⊕",
-            iconBg = Color(0xFFFEF3C7),
-            iconFg = Color(0xFFD97706),
+            icon = Icons.Rounded.Memory,
             label = "FUSION STATUS · fusion_predict()",
             result = statusResult,
             code = statusCode,
         )
 
-        // Model Inputs Reference
         ClinicalCard {
-            Text("ECG Model Inputs", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-            Text("ecg_predict(rr, peak_amp, beat_std, beat_energy)", fontSize = 11.sp, color = TextMuted)
-            Spacer(modifier = Modifier.height(6.dp))
+            Text("ECG Model Inputs", fontFamily = ManropeFontFamily, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Text("ecg_predict(rr, peak_amp, beat_std, beat_energy)", fontFamily = ManropeFontFamily, fontSize = 12.sp, color = TextMuted)
+            Spacer(modifier = Modifier.height(8.dp))
             KeyValueRow("RR Interval", "features.rr", mono = true)
             KeyValueRow("Peak Amplitude", "peak_amp (rolling max)", mono = true)
             KeyValueRow("Beat Std Dev", "beat_std (EMA)", mono = true)
@@ -105,20 +108,19 @@ fun AiResultsScreen(state: WearableUiState) {
         }
 
         ClinicalCard {
-            Text("Stress Model Inputs", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-            Text("stress_predict(hr, hrv, temp, motion)", fontSize = 11.sp, color = TextMuted)
-            Spacer(modifier = Modifier.height(6.dp))
+            Text("Stress Model Inputs", fontFamily = ManropeFontFamily, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Text("stress_predict(hr, hrv, temp, motion)", fontFamily = ManropeFontFamily, fontSize = 12.sp, color = TextMuted)
+            Spacer(modifier = Modifier.height(8.dp))
             KeyValueRow("Heart Rate", "features.hr", mono = true)
             KeyValueRow("HRV", "features.hrv", mono = true)
             KeyValueRow("Body Temperature", "raw.temp (TMP117)", mono = true)
             KeyValueRow("Motion Level", "features.motion (MPU6500)", mono = true, showDivider = false)
         }
 
-        // ECG Class Legend (MIT-BIH 6-class)
         ClinicalCard {
-            Text("ECG Class Legend (MIT-BIH)", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-            Spacer(modifier = Modifier.height(8.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("ECG Class Legend (MIT-BIH)", fontFamily = ManropeFontFamily, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Spacer(modifier = Modifier.height(10.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 HealthLabels.ecgClassMap.filterKeys { it >= 0 }.forEach { (code, info) ->
                     LegendItem(
                         label = "$code → ${info.label} — ${info.desc}",
@@ -128,11 +130,10 @@ fun AiResultsScreen(state: WearableUiState) {
             }
         }
 
-        // Stress Class Legend (WESAD 4-class)
         ClinicalCard {
-            Text("Stress Class Legend (WESAD)", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-            Spacer(modifier = Modifier.height(8.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Stress Class Legend (WESAD)", fontFamily = ManropeFontFamily, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Spacer(modifier = Modifier.height(10.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 HealthLabels.stressClassMap.filterKeys { it >= 0 }.forEach { (code, info) ->
                     LegendItem(
                         label = "$code → ${info.label} — ${info.desc}",
@@ -141,66 +142,71 @@ fun AiResultsScreen(state: WearableUiState) {
                 }
             }
         }
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(10.dp))
     }
 }
 
 @Composable
 private fun AiClassCard(
-    iconText: String,
-    iconBg: Color,
-    iconFg: Color,
+    icon: ImageVector,
     label: String,
     result: LabelInfo,
     code: Int,
 ) {
     val (bg, fg, border) = badgeColors(result.badge)
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(18.dp))
             .background(bg)
-            .border(1.dp, border, RoundedCornerShape(12.dp))
+            .border(1.dp, border, RoundedCornerShape(18.dp))
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(BgCard.copy(alpha = 0.85f)),
+            contentAlignment = Alignment.Center,
         ) {
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(iconBg),
-                contentAlignment = Alignment.Center,
+            Icon(icon, contentDescription = label, tint = fg, modifier = Modifier.size(22.dp))
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(iconText, color = iconFg, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            }
-            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = label,
+                    fontFamily = ManropeFontFamily,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.6.sp,
-                    color = fg.copy(alpha = 0.85f),
+                    letterSpacing = 0.7.sp,
+                    color = fg,
+                    modifier = Modifier.weight(1f),
                 )
-                Text(
-                    text = result.label,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
-                )
+                StatusBadge(text = "Code $code", level = result.badge)
             }
-            StatusBadge(text = "Code $code", level = result.badge)
+            Spacer(modifier = Modifier.height(3.dp))
+            Text(
+                text = result.label,
+                fontFamily = ManropeFontFamily,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = TextPrimary,
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = result.desc,
+                fontFamily = ManropeFontFamily,
+                fontSize = 12.sp,
+                color = TextSecondary,
+                lineHeight = 17.sp,
+            )
         }
-        Text(
-            text = result.desc,
-            fontSize = 13.sp,
-            color = TextSecondary,
-            lineHeight = 18.sp,
-        )
     }
 }
 
@@ -212,24 +218,25 @@ private fun LegendItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (active) AccentBlueLight else BgPage)
-            .border(1.dp, if (active) InfoBorder else BorderLight, RoundedCornerShape(8.dp))
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (active) AccentTealLight else BgSoft)
+            .border(1.dp, if (active) AccentTealBorder else BorderLight, RoundedCornerShape(10.dp))
+            .padding(horizontal = 12.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(9.dp),
     ) {
         Box(
             modifier = Modifier
                 .size(8.dp)
                 .clip(CircleShape)
-                .background(if (active) AccentBlue else BorderStrong)
+                .background(if (active) AccentTeal else BorderStrong)
         )
         Text(
             text = label,
+            fontFamily = ManropeFontFamily,
             fontSize = 12.sp,
-            color = if (active) AccentBlueDark else TextSecondary,
-            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (active) AccentTealDark else TextSecondary,
+            fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
         )
     }
 }

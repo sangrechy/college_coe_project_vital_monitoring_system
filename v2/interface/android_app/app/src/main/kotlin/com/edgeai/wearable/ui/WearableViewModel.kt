@@ -1,6 +1,7 @@
 package com.edgeai.wearable.ui
 
 import android.app.Application
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.edgeai.wearable.ble.BleConnectionState
@@ -24,19 +25,24 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlin.math.PI
+import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
 
-data class WearableUiState(
+@Immutable
+data class LiveTelemetryState(
     val latestPacket: HealthPacket? = null,
     val ecgRawBuffer: List<Float> = emptyList(),
     val ecgFiltBuffer: List<Float> = emptyList(),
     val packetRate: Double = 0.0,
     val signalQuality: String = "Unknown",
+)
+
+@Immutable
+data class DeviceUiState(
     val bleState: BleConnectionState = BleConnectionState.DISCONNECTED,
     val deviceName: String? = null,
     val deviceAddress: String? = null,
@@ -45,23 +51,30 @@ data class WearableUiState(
     val bleMessage: String? = null,
     val uptimeSeconds: Long = 0L,
     val dbRecordCount: Int = 0,
-    val vitalsTrend10m: List<VitalsTrendRow> = emptyList(),
-    val historyWindowMinutes: Int = 10,
-    val historyEcg: List<TrendPoint> = emptyList(),
-    val historyVitals: List<VitalsTrendRow> = emptyList(),
-    val isHistoryLoading: Boolean = false,
     val autoReconnect: Boolean = false,
     val targetAddress: String = WearableBleManager.DEFAULT_DEVICE_ADDRESS,
     val demoMode: Boolean = false,
+    val packetRate: Double = 0.0,
+    val signalQuality: String = "Unknown",
 ) {
     val isConnected: Boolean
         get() = bleState == BleConnectionState.CONNECTED || demoMode
 }
 
+@Immutable
+data class HistoryUiState(
+    val vitalsTrend10m: List<VitalsTrendRow> = emptyList(),
+    val historyWindowMinutes: Int = 10,
+    val historyEcg: List<TrendPoint> = emptyList(),
+    val historyVitals: List<VitalsTrendRow> = emptyList(),
+    val isHistoryLoading: Boolean = false,
+)
+
 class WearableViewModel(application: Application) : AndroidViewModel(application) {
 
     companion object {
         private const val ECG_BUFFER_SIZE = 120
+        private const val DB_FLUSH_INTERVAL_MS = 1500L
     }
 
     private val db = HealthDatabase(application)
@@ -71,20 +84,28 @@ class WearableViewModel(application: Application) : AndroidViewModel(application
         onPacketReceived = { packet, rawJson -> handleIncomingPacket(packet, rawJson) },
     )
 
-    private val _uiState = MutableStateFlow(WearableUiState())
-    val uiState: StateFlow<WearableUiState> = _uiState.asStateFlow()
+    private val _liveState = MutableStateFlow(LiveTelemetryState())
+    val liveState: StateFlow<LiveTelemetryState> = _liveState.asStateFlow()
+
+    private val _deviceState = MutableStateFlow(DeviceUiState())
+    val deviceState: StateFlow<DeviceUiState> = _deviceState.asStateFlow()
+
+    private val _historyState = MutableStateFlow(HistoryUiState())
+    val historyState: StateFlow<HistoryUiState> = _historyState.asStateFlow()
 
     private val startTimeMs = System.currentTimeMillis()
     private val ecgRawRing = ArrayDeque<Float>(ECG_BUFFER_SIZE)
     private val ecgFiltRing = ArrayDeque<Float>(ECG_BUFFER_SIZE)
+    private val pendingDbQueue = ConcurrentLinkedQueue<Triple<Long, HealthPacket, String?>>()
 
+    @Volatile
     private var packetsThisWindow = 0
     private var lastRateTimestampMs = System.currentTimeMillis()
     private var demoJob: Job? = null
 
     init {
         observeBleManager()
-        startTimers()
+        startBackgroundLoops()
         refreshHistory()
     }
 
@@ -99,7 +120,7 @@ class WearableViewModel(application: Application) : AndroidViewModel(application
             ) { state, name, address, scanning, devices ->
                 BleSnapshot(state, name, address, scanning, devices)
             }.collect { snap ->
-                _uiState.update { current ->
+                _deviceState.update { current ->
                     current.copy(
                         bleState = snap.state,
                         deviceName = if (current.demoMode) "EdgeAI_Wearable (Demo)" else snap.name,
@@ -112,7 +133,7 @@ class WearableViewModel(application: Application) : AndroidViewModel(application
         }
         viewModelScope.launch {
             bleManager.statusMessage.collect { msg ->
-                _uiState.update { it.copy(bleMessage = msg) }
+                _deviceState.update { it.copy(bleMessage = msg) }
             }
         }
     }
@@ -125,53 +146,53 @@ class WearableViewModel(application: Application) : AndroidViewModel(application
         val devices: List<ScannedBleDevice>,
     )
 
-    private fun startTimers() {
-        // 1-second uptime & packet-rate decay ticker
+    private fun startBackgroundLoops() {
+        // 1-second uptime & packet-rate ticker
         viewModelScope.launch {
             while (isActive) {
                 delay(1000L)
                 val now = System.currentTimeMillis()
                 val elapsedSec = (now - lastRateTimestampMs) / 1000.0
-                var newRate = _uiState.value.packetRate
                 if (elapsedSec >= 1.0) {
-                    newRate = ((packetsThisWindow / elapsedSec) * 10.0).roundToInt() / 10.0
+                    val count = packetsThisWindow
                     packetsThisWindow = 0
                     lastRateTimestampMs = now
+                    val rate = ((count / elapsedSec) * 10.0).roundToInt() / 10.0
+                    _liveState.update { if (it.packetRate != rate) it.copy(packetRate = rate) else it }
                 }
-                _uiState.update {
+                val up = (now - startTimeMs) / 1000L
+                val liveSnap = _liveState.value
+                _deviceState.update {
                     it.copy(
-                        uptimeSeconds = (now - startTimeMs) / 1000L,
-                        packetRate = newRate,
+                        uptimeSeconds = up,
+                        packetRate = liveSnap.packetRate,
+                        signalQuality = liveSnap.signalQuality,
                     )
                 }
+            }
+        }
+
+        // Batched SQLite writer (flushes every 1.5s in a single transaction -> zero UI stutter)
+        viewModelScope.launch(Dispatchers.IO) {
+            while (isActive) {
+                delay(DB_FLUSH_INTERVAL_MS)
+                flushDbQueue()
             }
         }
 
         // 5-second SQLite trend & count refresh
         viewModelScope.launch(Dispatchers.IO) {
             while (isActive) {
-                val count = db.getCount()
-                val vitals10m = db.getVitalsTrend(minutes = 10)
-                val window = _uiState.value.historyWindowMinutes
-                val histEcg = db.getEcgTrend(minutes = window)
-                val histVitals = db.getVitalsTrend(minutes = window)
-                _uiState.update {
-                    it.copy(
-                        dbRecordCount = count,
-                        vitalsTrend10m = vitals10m,
-                        historyEcg = histEcg,
-                        historyVitals = histVitals,
-                    )
-                }
                 delay(5000L)
+                loadHistoryInternal()
             }
         }
 
-        // Auto-reconnect loop (every 6 seconds if enabled and disconnected)
+        // Auto-reconnect loop
         viewModelScope.launch {
             while (isActive) {
                 delay(6000L)
-                val s = _uiState.value
+                val s = _deviceState.value
                 if (s.autoReconnect && !s.demoMode &&
                     s.bleState == BleConnectionState.DISCONNECTED &&
                     bleManager.isBluetoothEnabled()
@@ -182,13 +203,21 @@ class WearableViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    private fun flushDbQueue() {
+        if (pendingDbQueue.isEmpty()) return
+        val batch = ArrayList<Triple<Long, HealthPacket, String?>>(32)
+        while (true) {
+            val item = pendingDbQueue.poll() ?: break
+            batch.add(item)
+        }
+        if (batch.isNotEmpty()) {
+            db.insertPacketsBatch(batch)
+        }
+    }
+
     private fun handleIncomingPacket(packet: HealthPacket, rawJson: String?) {
         packetsThisWindow++
-
-        // Persist asynchronously to SQLite
-        viewModelScope.launch(Dispatchers.IO) {
-            db.insertPacket(packet, rawJson)
-        }
+        pendingDbQueue.offer(Triple(System.currentTimeMillis(), packet, rawJson))
 
         val ecgRaw = packet.raw?.ecg?.toFloat()
         val ecgFilt = packet.features?.ecgFilt?.toFloat()
@@ -206,7 +235,7 @@ class WearableViewModel(application: Application) : AndroidViewModel(application
             val filtCopy = ecgFiltRing.toList()
             val quality = calcSignalQuality(packet)
 
-            _uiState.update {
+            _liveState.update {
                 it.copy(
                     latestPacket = packet,
                     ecgRawBuffer = rawCopy,
@@ -217,90 +246,97 @@ class WearableViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    private fun loadHistoryInternal() {
+        val count = db.getCount()
+        val vitals10m = db.getVitalsTrend(minutes = 10)
+        val window = _historyState.value.historyWindowMinutes
+        val histEcg = db.getEcgTrend(minutes = window)
+        val histVitals = db.getVitalsTrend(minutes = window)
+
+        _deviceState.update { if (it.dbRecordCount != count) it.copy(dbRecordCount = count) else it }
+        _historyState.update {
+            it.copy(
+                vitalsTrend10m = vitals10m,
+                historyEcg = histEcg,
+                historyVitals = histVitals,
+                isHistoryLoading = false,
+            )
+        }
+    }
+
     fun startScan() {
-        if (_uiState.value.demoMode) setDemoMode(false)
+        if (_deviceState.value.demoMode) setDemoMode(false)
         bleManager.startScan(autoConnectTarget = false)
     }
 
-    fun stopScan() {
-        bleManager.stopScan()
-    }
+    fun stopScan() = bleManager.stopScan()
 
     fun connect(address: String? = null) {
-        if (_uiState.value.demoMode) setDemoMode(false)
+        if (_deviceState.value.demoMode) setDemoMode(false)
         val addr = address?.takeIf { it.isNotBlank() }
         if (addr != null) {
             bleManager.connectByAddress(addr)
         } else {
-            bleManager.connectAuto(_uiState.value.targetAddress.takeIf { it.isNotBlank() })
+            bleManager.connectAuto(_deviceState.value.targetAddress.takeIf { it.isNotBlank() })
         }
     }
 
     fun connectAutoScan() {
-        if (_uiState.value.demoMode) setDemoMode(false)
+        if (_deviceState.value.demoMode) setDemoMode(false)
         bleManager.startScan(autoConnectTarget = true)
     }
 
     fun disconnect() {
-        if (_uiState.value.demoMode) {
-            setDemoMode(false)
-        }
+        if (_deviceState.value.demoMode) setDemoMode(false)
         bleManager.disconnect()
     }
 
     fun setAutoReconnect(enabled: Boolean) {
-        _uiState.update { it.copy(autoReconnect = enabled) }
+        _deviceState.update { it.copy(autoReconnect = enabled) }
     }
 
     fun setTargetAddress(address: String) {
-        _uiState.update { it.copy(targetAddress = address) }
+        _deviceState.update { it.copy(targetAddress = address) }
     }
 
     fun setHistoryWindow(minutes: Int) {
-        _uiState.update { it.copy(historyWindowMinutes = minutes) }
+        _historyState.update { it.copy(historyWindowMinutes = minutes) }
         refreshHistory()
     }
 
     fun refreshHistory() {
         viewModelScope.launch(Dispatchers.IO) {
-            _uiState.update { it.copy(isHistoryLoading = true) }
-            val window = _uiState.value.historyWindowMinutes
-            val ecg = db.getEcgTrend(minutes = window)
-            val vitals = db.getVitalsTrend(minutes = window)
-            val vitals10m = db.getVitalsTrend(minutes = 10)
-            val count = db.getCount()
-            _uiState.update {
-                it.copy(
-                    historyEcg = ecg,
-                    historyVitals = vitals,
-                    vitalsTrend10m = vitals10m,
-                    dbRecordCount = count,
-                    isHistoryLoading = false,
-                )
-            }
+            _historyState.update { it.copy(isHistoryLoading = true) }
+            flushDbQueue()
+            loadHistoryInternal()
         }
     }
 
     fun clearDatabase() {
         viewModelScope.launch(Dispatchers.IO) {
+            pendingDbQueue.clear()
             db.clear()
-            _uiState.update {
+            _deviceState.update {
                 it.copy(
                     dbRecordCount = 0,
+                    bleMessage = "Local SQLite history cleared.",
+                )
+            }
+            _historyState.update {
+                it.copy(
                     vitalsTrend10m = emptyList(),
                     historyEcg = emptyList(),
                     historyVitals = emptyList(),
-                    bleMessage = "Local SQLite history cleared.",
                 )
             }
         }
     }
 
     fun setDemoMode(enabled: Boolean) {
-        if (enabled == _uiState.value.demoMode) return
+        if (enabled == _deviceState.value.demoMode) return
         if (enabled) {
             bleManager.disconnect()
-            _uiState.update {
+            _deviceState.update {
                 it.copy(
                     demoMode = true,
                     deviceName = "EdgeAI_Wearable (Demo)",
@@ -312,7 +348,7 @@ class WearableViewModel(application: Application) : AndroidViewModel(application
         } else {
             demoJob?.cancel()
             demoJob = null
-            _uiState.update {
+            _deviceState.update {
                 it.copy(
                     demoMode = false,
                     deviceName = null,
@@ -329,7 +365,6 @@ class WearableViewModel(application: Application) : AndroidViewModel(application
             var tick = 0
             while (isActive) {
                 val t = tick * 0.1
-                // Synthetic P-QRS-T ECG wave around baseline 1500, R-peak ~2150
                 val phase = (t % 0.85) / 0.85
                 val rPeak = 680.0 * exp(-((phase - 0.25) * 28.0).let { it * it })
                 val pWave = 110.0 * exp(-((phase - 0.12) * 18.0).let { it * it })
@@ -373,7 +408,7 @@ class WearableViewModel(application: Application) : AndroidViewModel(application
                 )
                 handleIncomingPacket(packet, null)
                 tick++
-                delay(100L) // 10 Hz
+                delay(100L)
             }
         }
     }
@@ -382,6 +417,7 @@ class WearableViewModel(application: Application) : AndroidViewModel(application
         super.onCleared()
         demoJob?.cancel()
         bleManager.disconnect()
+        flushDbQueue()
         db.close()
     }
 }
