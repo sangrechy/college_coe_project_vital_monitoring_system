@@ -199,9 +199,10 @@ fun WearableApp(
         ) {
             when (currentTab) {
                 WearableTab.OVERVIEW -> {
-                    val live by viewModel.liveState.collectAsStateWithLifecycle()
+                    val vitals by viewModel.vitalsState.collectAsStateWithLifecycle()
                     OverviewScreen(
-                        live = live,
+                        vitals = vitals,
+                        ecgStream = viewModel.ecgStream,
                         isConnected = deviceState.isConnected,
                         onNavigateToEcg = { currentTab = WearableTab.ECG },
                         onNavigateToVitals = { currentTab = WearableTab.VITALS },
@@ -211,23 +212,26 @@ fun WearableApp(
                 }
 
                 WearableTab.ECG -> {
-                    val live by viewModel.liveState.collectAsStateWithLifecycle()
-                    EcgMonitorScreen(live = live)
+                    val vitals by viewModel.vitalsState.collectAsStateWithLifecycle()
+                    EcgMonitorScreen(
+                        vitals = vitals,
+                        ecgStream = viewModel.ecgStream,
+                    )
                 }
 
                 WearableTab.VITALS -> {
-                    val live by viewModel.liveState.collectAsStateWithLifecycle()
+                    val vitals by viewModel.vitalsState.collectAsStateWithLifecycle()
                     val history by viewModel.historyState.collectAsStateWithLifecycle()
                     VitalSignsScreen(
-                        live = live,
+                        vitals = vitals,
                         history = history,
                         isConnected = deviceState.isConnected,
                     )
                 }
 
                 WearableTab.AI -> {
-                    val live by viewModel.liveState.collectAsStateWithLifecycle()
-                    AiResultsScreen(live = live)
+                    val vitals by viewModel.vitalsState.collectAsStateWithLifecycle()
+                    AiResultsScreen(vitals = vitals)
                 }
 
                 WearableTab.TRENDS -> {

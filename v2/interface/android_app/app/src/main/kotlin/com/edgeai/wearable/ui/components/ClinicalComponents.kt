@@ -38,8 +38,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -48,13 +48,17 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.edgeai.wearable.data.BadgeLevel
+import com.edgeai.wearable.ui.EcgWaveSnapshot
+import kotlinx.coroutines.flow.StateFlow
 import com.edgeai.wearable.ui.theme.AccentTeal
 import com.edgeai.wearable.ui.theme.AccentTealBorder
 import com.edgeai.wearable.ui.theme.AccentTealDark
@@ -351,7 +355,7 @@ fun StatTile(
                             Box(
                                 modifier = Modifier
                                     .size(7.dp)
-                                    .alpha(pulseAlpha)
+                                    .graphicsLayer { alpha = pulseAlpha }
                                     .clip(CircleShape)
                                     .background(accentColor)
                             )
@@ -580,19 +584,18 @@ fun KeyValueRow(
 }
 
 /**
- * Area-filled ECG sparkline matching Overview.js (.ecg-well + AreaChart gradient).
- * Reuses Path instances to keep 10 Hz live drawing allocation-free.
+ * Draw-phase-only live ECG sparkline matching Overview.js (.ecg-well + AreaChart gradient).
+ * Reads EcgWaveSnapshot ONLY inside DrawScope with cached Brush/Path/Stroke — zero allocations!
  */
 @Composable
-fun SparklineAreaChart(
-    values: List<Float>,
+fun LiveSparklineAreaChart(
+    ecgStream: StateFlow<EcgWaveSnapshot>,
     color: Color,
+    maxPoints: Int = 60,
     height: Dp = 110.dp,
     modifier: Modifier = Modifier,
 ) {
-    val linePath = remember { Path() }
-    val fillPath = remember { Path() }
-    val strokeStyle = remember { Stroke(width = 4f, cap = StrokeCap.Round, join = StrokeJoin.Round) }
+    val waveState = ecgStream.collectAsStateWithLifecycle()
 
     Box(
         modifier = modifier
@@ -601,53 +604,226 @@ fun SparklineAreaChart(
             .clip(RoundedCornerShape(12.dp))
             .background(BgSoft)
             .border(1.dp, BorderLight, RoundedCornerShape(12.dp))
-            .padding(horizontal = 4.dp, vertical = 6.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (values.size < 2) {
-            Text("Waiting for live signal…", fontFamily = ManropeFontFamily, fontSize = 12.sp, color = TextMuted)
-            return@Box
-        }
-
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            var minV = Float.POSITIVE_INFINITY
-            var maxV = Float.NEGATIVE_INFINITY
-            for (v in values) {
-                if (v < minV) minV = v
-                if (v > maxV) maxV = v
-            }
-            val range = (maxV - minV).let { if (it < 1f) 1f else it }
-            val pad = 8f
-            val usableH = (size.height - pad * 2).coerceAtLeast(1f)
-            val stepX = size.width / (values.size - 1).coerceAtLeast(1)
-
-            linePath.reset()
-            fillPath.reset()
-
-            values.forEachIndexed { idx, v ->
-                val x = idx * stepX
-                val y = size.height - pad - ((v - minV) / range) * usableH
-                if (idx == 0) {
-                    linePath.moveTo(x, y)
-                    fillPath.moveTo(x, size.height)
-                    fillPath.lineTo(x, y)
-                } else {
-                    linePath.lineTo(x, y)
-                    fillPath.lineTo(x, y)
-                }
-            }
-            fillPath.lineTo(size.width, size.height)
-            fillPath.close()
-
-            drawPath(
-                path = fillPath,
-                brush = Brush.verticalGradient(
+            .padding(horizontal = 4.dp, vertical = 6.dp)
+            .drawWithCache {
+                val linePath = Path()
+                val fillPath = Path()
+                val strokeStyle = Stroke(width = 4f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                val fillBrush = Brush.verticalGradient(
                     colors = listOf(color.copy(alpha = 0.26f), color.copy(alpha = 0.0f)),
                     startY = 0f,
                     endY = size.height,
-                ),
-            )
-            drawPath(path = linePath, color = color, style = strokeStyle)
+                )
+                onDrawBehind {
+                    val arr = waveState.value.raw
+                    val total = arr.size
+                    if (total < 2) return@onDrawBehind
+
+                    val startIdx = (total - maxPoints).coerceAtLeast(0)
+                    val count = total - startIdx
+                    var minV = Float.POSITIVE_INFINITY
+                    var maxV = Float.NEGATIVE_INFINITY
+                    for (i in startIdx until total) {
+                        val v = arr[i]
+                        if (v < minV) minV = v
+                        if (v > maxV) maxV = v
+                    }
+                    val range = (maxV - minV).let { if (it < 1f) 1f else it }
+                    val pad = 8f
+                    val usableH = (size.height - pad * 2).coerceAtLeast(1f)
+                    val stepX = size.width / (count - 1).coerceAtLeast(1)
+
+                    linePath.reset()
+                    fillPath.reset()
+
+                    for (i in 0 until count) {
+                        val x = i * stepX
+                        val y = size.height - pad - ((arr[startIdx + i] - minV) / range) * usableH
+                        if (i == 0) {
+                            linePath.moveTo(x, y)
+                            fillPath.moveTo(x, size.height)
+                            fillPath.lineTo(x, y)
+                        } else {
+                            linePath.lineTo(x, y)
+                            fillPath.lineTo(x, y)
+                        }
+                    }
+                    fillPath.lineTo(size.width, size.height)
+                    fillPath.close()
+
+                    drawPath(path = fillPath, brush = fillBrush)
+                    drawPath(path = linePath, color = color, style = strokeStyle)
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (waveState.value.raw.size < 2) {
+            Text("Waiting for live signal…", fontFamily = ManropeFontFamily, fontSize = 12.sp, color = TextMuted)
+        }
+    }
+}
+
+/**
+ * Draw-phase-only live ECG AreaChart card for EcgMonitorScreen.
+ * Isolates 10 Hz redraws to GPU draw phase with cached Brush/Path/Stroke/Dash.
+ */
+@Composable
+fun LiveEcgAreaChartCard(
+    title: String,
+    subtitle: String,
+    seriesLabel: String,
+    ecgStream: StateFlow<EcgWaveSnapshot>,
+    useFiltered: Boolean,
+    color: Color,
+    referenceLine: ChartReferenceLine? = null,
+    chartHeight: Dp = 200.dp,
+    emptyMessage: String = "Waiting for live ECG samples…",
+) {
+    val waveState = ecgStream.collectAsStateWithLifecycle()
+
+    ClinicalCard {
+        Text(
+            title,
+            fontFamily = ManropeFontFamily,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextPrimary,
+        )
+        Text(
+            subtitle,
+            fontFamily = ManropeFontFamily,
+            fontSize = 12.sp,
+            color = TextMuted,
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(chartHeight)
+                .clip(RoundedCornerShape(12.dp))
+                .background(BgSoft)
+                .border(1.dp, BorderLight, RoundedCornerShape(12.dp))
+                .padding(horizontal = 6.dp, vertical = 8.dp)
+                .drawWithCache {
+                    val linePath = Path()
+                    val fillPath = Path()
+                    val strokeStyle = Stroke(width = 4f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                    val refDash = PathEffect.dashPathEffect(floatArrayOf(10f, 8f), 0f)
+                    val fillBrush = Brush.verticalGradient(
+                        colors = listOf(color.copy(alpha = 0.22f), color.copy(alpha = 0.0f)),
+                        startY = 0f,
+                        endY = size.height,
+                    )
+                    onDrawBehind {
+                        val snap = waveState.value
+                        val arr = if (useFiltered) snap.filt else snap.raw
+                        val count = arr.size
+                        if (count < 2) return@onDrawBehind
+
+                        // Horizontal subtle gridlines
+                        val gridSteps = 4
+                        for (i in 0..gridSteps) {
+                            val y = size.height * i / gridSteps
+                            drawLine(
+                                color = GridColor,
+                                start = Offset(0f, y),
+                                end = Offset(size.width, y),
+                                strokeWidth = 1.8f,
+                            )
+                        }
+
+                        var rawMin = Float.POSITIVE_INFINITY
+                        var rawMax = Float.NEGATIVE_INFINITY
+                        for (i in 0 until count) {
+                            val v = arr[i]
+                            if (v < rawMin) rawMin = v
+                            if (v > rawMax) rawMax = v
+                        }
+                        if (referenceLine != null) {
+                            if (referenceLine.value < rawMin) rawMin = referenceLine.value
+                            if (referenceLine.value > rawMax) rawMax = referenceLine.value
+                        }
+                        val padRange = ((rawMax - rawMin) * 0.08f).let { if (it < 1f) 1f else it }
+                        val minV = rawMin - padRange
+                        val maxV = rawMax + padRange
+                        val range = (maxV - minV).coerceAtLeast(1f)
+
+                        if (referenceLine != null) {
+                            val refY = size.height - ((referenceLine.value - minV) / range) * size.height
+                            if (refY in 0f..size.height) {
+                                drawLine(
+                                    color = referenceLine.color.copy(alpha = 0.6f),
+                                    start = Offset(0f, refY),
+                                    end = Offset(size.width, refY),
+                                    strokeWidth = 2.5f,
+                                    pathEffect = refDash,
+                                )
+                            }
+                        }
+
+                        val stepX = size.width / (count - 1).coerceAtLeast(1)
+                        linePath.reset()
+                        fillPath.reset()
+                        for (i in 0 until count) {
+                            val x = i * stepX
+                            val y = size.height - ((arr[i] - minV) / range) * size.height
+                            if (i == 0) {
+                                linePath.moveTo(x, y)
+                                fillPath.moveTo(x, size.height)
+                                fillPath.lineTo(x, y)
+                            } else {
+                                linePath.lineTo(x, y)
+                                fillPath.lineTo(x, y)
+                            }
+                        }
+                        fillPath.lineTo(size.width, size.height)
+                        fillPath.close()
+
+                        drawPath(path = fillPath, brush = fillBrush)
+                        drawPath(path = linePath, color = color, style = strokeStyle)
+                    }
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            val hasData = (if (useFiltered) waveState.value.filt.size else waveState.value.raw.size) >= 2
+            if (!hasData) {
+                Text(emptyMessage, fontFamily = ManropeFontFamily, fontSize = 12.sp, color = TextMuted)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(14.dp)
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(color)
+                )
+                Text(seriesLabel, fontFamily = ManropeFontFamily, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = TextSecondary)
+            }
+            if (referenceLine?.label != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(14.dp)
+                            .height(2.dp)
+                            .background(referenceLine.color.copy(alpha = 0.7f))
+                    )
+                    Text(referenceLine.label, fontFamily = ManropeFontFamily, fontSize = 11.sp, color = referenceLine.color)
+                }
+            }
         }
     }
 }

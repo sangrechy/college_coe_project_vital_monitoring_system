@@ -21,6 +21,7 @@ import com.edgeai.wearable.data.ScannedBleDevice
 import com.edgeai.wearable.data.parseHealthPacket
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,12 +39,14 @@ enum class BleConnectionState {
 }
 
 /**
- * Robust Android BLE central manager for ESP32-S3 EdgeAI_Wearable.
- * - Supports Android 7.0 (API 24) through Android 16 (API 36)
- * - Negotiates MTU 247 with a 1.5s fallback so service discovery never stalls
- * - Reassembles fragmented JSON notifications if a phone's BLE stack keeps MTU=23
- * - Throttles scan UI emissions (400ms) to prevent scanner lag in crowded RF areas
+ * Zero-UI-blocking Android BLE central manager for ESP32-S3 EdgeAI_Wearable.
+ * - Executes ALL Bluetooth/GATT IPC on a dedicated single-threaded bleDispatcher (never blocks Main Thread!)
+ * - Requests CONNECTION_PRIORITY_HIGH for snappy handshake & low-jitter 10 Hz notifications
+ * - Negotiates MTU 247 with an 800ms fallback so discovery never stalls
+ * - Offloads JSON parsing off the Binder thread onto Dispatchers.Default
+ * - Reassembles fragmented JSON notifications if a phone's BT stack keeps MTU=23
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class WearableBleManager(
     private val context: Context,
     private val scope: CoroutineScope,
@@ -58,10 +61,13 @@ class WearableBleManager(
         const val DEFAULT_DEVICE_ADDRESS = "44:B1:76:CE:D9:ED"
         const val REQUESTED_MTU = 247
         const val SCAN_DURATION_MS = 10_000L
-        private const val MTU_FALLBACK_MS = 1_500L
-        private const val SCAN_THROTTLE_MS = 400L
+        private const val MTU_FALLBACK_MS = 800L
+        private const val SCAN_THROTTLE_MS = 450L
         private const val MAX_JSON_BUFFER = 2048
     }
+
+    // Dedicated serialized dispatcher for all BluetoothGatt / Scanner IPC
+    private val bleDispatcher = Dispatchers.IO.limitedParallelism(1)
 
     private val bluetoothManager =
         context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
@@ -72,12 +78,15 @@ class WearableBleManager(
     private var gatt: BluetoothGatt? = null
     @Volatile
     private var servicesDiscoveryStarted = false
+    @Volatile
+    private var autoConnectOnScan = false
+    @Volatile
+    private var manualDisconnect = false
+
     private var scanTimeoutJob: Job? = null
     private var scanThrottleJob: Job? = null
     private var mtuFallbackJob: Job? = null
     private var connectJob: Job? = null
-    private var autoConnectOnScan = false
-    private var manualDisconnect = false
 
     private val jsonBuffer = StringBuilder(512)
     private val discoveredMap = ConcurrentHashMap<String, ScannedBleDevice>()
@@ -104,59 +113,65 @@ class WearableBleManager(
 
     @SuppressLint("MissingPermission")
     fun startScan(autoConnectTarget: Boolean = false) {
-        val adapter = bluetoothAdapter
-        if (adapter == null || !adapter.isEnabled) {
-            _statusMessage.value = "Bluetooth is turned off. Please enable Bluetooth."
-            return
-        }
-        val scanner = adapter.bluetoothLeScanner
-        if (scanner == null) {
-            _statusMessage.value = "BLE scanner unavailable on this device."
-            return
-        }
+        scope.launch(bleDispatcher) {
+            val adapter = bluetoothAdapter
+            if (adapter == null || !adapter.isEnabled) {
+                _statusMessage.value = "Bluetooth is turned off. Please enable Bluetooth."
+                return@launch
+            }
+            val scanner = adapter.bluetoothLeScanner
+            if (scanner == null) {
+                _statusMessage.value = "BLE scanner unavailable on this device."
+                return@launch
+            }
 
-        stopScan()
-        autoConnectOnScan = autoConnectTarget
-        discoveredMap.clear()
-        _scannedDevices.value = emptyList()
-        _isScanning.value = true
-        if (_connectionState.value == BleConnectionState.DISCONNECTED) {
-            _connectionState.value = BleConnectionState.SCANNING
-        }
-        _statusMessage.value = if (autoConnectTarget) {
-            "Scanning for $DEFAULT_DEVICE_NAME…"
-        } else {
-            "Scanning for nearby BLE devices (10s)…"
-        }
+            stopScanInternal()
+            autoConnectOnScan = autoConnectTarget
+            discoveredMap.clear()
+            _scannedDevices.value = emptyList()
+            _isScanning.value = true
+            if (_connectionState.value == BleConnectionState.DISCONNECTED) {
+                _connectionState.value = BleConnectionState.SCANNING
+            }
+            _statusMessage.value = if (autoConnectTarget) {
+                "Scanning for $DEFAULT_DEVICE_NAME…"
+            } else {
+                "Scanning for nearby BLE devices (10s)…"
+            }
 
-        val settings = ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-            .build()
+            val settings = ScanSettings.Builder()
+                .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                .build()
 
-        try {
-            scanner.startScan(null, settings, scanCallback)
-        } catch (_: SecurityException) {
-            _isScanning.value = false
-            _connectionState.value = BleConnectionState.DISCONNECTED
-            _statusMessage.value = "Missing Bluetooth scan permission."
-            return
-        }
+            try {
+                scanner.startScan(null, settings, scanCallback)
+            } catch (_: SecurityException) {
+                _isScanning.value = false
+                _connectionState.value = BleConnectionState.DISCONNECTED
+                _statusMessage.value = "Missing Bluetooth scan permission."
+                return@launch
+            }
 
-        scanTimeoutJob = scope.launch(Dispatchers.Main) {
-            delay(SCAN_DURATION_MS)
-            stopScan()
-            if (autoConnectTarget && _connectionState.value != BleConnectionState.CONNECTED &&
-                _connectionState.value != BleConnectionState.CONNECTING
-            ) {
-                _statusMessage.value = "No $DEFAULT_DEVICE_NAME found nearby."
-            } else if (!autoConnectTarget && discoveredMap.isEmpty()) {
-                _statusMessage.value = "No BLE devices found nearby."
+            scanTimeoutJob = scope.launch(bleDispatcher) {
+                delay(SCAN_DURATION_MS)
+                stopScanInternal()
+                if (autoConnectTarget && _connectionState.value != BleConnectionState.CONNECTED &&
+                    _connectionState.value != BleConnectionState.CONNECTING
+                ) {
+                    _statusMessage.value = "No $DEFAULT_DEVICE_NAME found nearby."
+                } else if (!autoConnectTarget && discoveredMap.isEmpty()) {
+                    _statusMessage.value = "No BLE devices found nearby."
+                }
             }
         }
     }
 
-    @SuppressLint("MissingPermission")
     fun stopScan() {
+        scope.launch(bleDispatcher) { stopScanInternal() }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun stopScanInternal() {
         scanTimeoutJob?.cancel()
         scanTimeoutJob = null
         scanThrottleJob?.cancel()
@@ -176,24 +191,25 @@ class WearableBleManager(
 
     @SuppressLint("MissingPermission")
     fun connectByAddress(address: String) {
-        val adapter = bluetoothAdapter
-        if (adapter == null || !adapter.isEnabled) {
-            _statusMessage.value = "Bluetooth is turned off. Please enable Bluetooth."
-            return
+        scope.launch(bleDispatcher) {
+            val adapter = bluetoothAdapter
+            if (adapter == null || !adapter.isEnabled) {
+                _statusMessage.value = "Bluetooth is turned off. Please enable Bluetooth."
+                return@launch
+            }
+            stopScanInternal()
+            manualDisconnect = false
+            val normalized = address.trim().uppercase()
+            val device = try {
+                adapter.getRemoteDevice(normalized)
+            } catch (_: IllegalArgumentException) {
+                _statusMessage.value = "Invalid MAC address: $address"
+                return@launch
+            }
+            connectToDeviceInternal(device)
         }
-        stopScan()
-        manualDisconnect = false
-        val normalized = address.trim().uppercase()
-        val device = try {
-            adapter.getRemoteDevice(normalized)
-        } catch (_: IllegalArgumentException) {
-            _statusMessage.value = "Invalid MAC address: $address"
-            return
-        }
-        connectToDevice(device)
     }
 
-    @SuppressLint("MissingPermission")
     fun connectAuto(preferredAddress: String? = null) {
         if (!preferredAddress.isNullOrBlank()) {
             connectByAddress(preferredAddress)
@@ -203,9 +219,10 @@ class WearableBleManager(
     }
 
     @SuppressLint("MissingPermission")
-    private fun connectToDevice(device: BluetoothDevice) {
+    private fun connectToDeviceInternal(device: BluetoothDevice) {
         connectJob?.cancel()
-        closeGatt()
+        val hadPreviousGatt = gatt != null
+        closeGattInternal()
         synchronized(jsonBuffer) { jsonBuffer.setLength(0) }
         servicesDiscoveryStarted = false
 
@@ -218,9 +235,10 @@ class WearableBleManager(
         }
         _statusMessage.value = "Connecting to ${_deviceName.value} [${device.address}]…"
 
-        // Small 150ms settle delay after stopScan/closeGatt avoids Android GATT error 133
-        connectJob = scope.launch(Dispatchers.Main) {
-            delay(150L)
+        connectJob = scope.launch(bleDispatcher) {
+            if (hadPreviousGatt) {
+                delay(120L) // Brief settle only when tearing down an existing GATT handle
+            }
             try {
                 gatt = device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
             } catch (_: SecurityException) {
@@ -230,21 +248,22 @@ class WearableBleManager(
         }
     }
 
-    @SuppressLint("MissingPermission")
     fun disconnect() {
         manualDisconnect = true
         connectJob?.cancel()
         mtuFallbackJob?.cancel()
-        stopScan()
-        closeGatt()
-        synchronized(jsonBuffer) { jsonBuffer.setLength(0) }
         _connectionState.value = BleConnectionState.DISCONNECTED
         _deviceName.value = null
         _statusMessage.value = "Disconnected."
+        scope.launch(bleDispatcher) {
+            stopScanInternal()
+            closeGattInternal()
+            synchronized(jsonBuffer) { jsonBuffer.setLength(0) }
+        }
     }
 
     @SuppressLint("MissingPermission")
-    private fun closeGatt() {
+    private fun closeGattInternal() {
         mtuFallbackJob?.cancel()
         mtuFallbackJob = null
         val g = gatt
@@ -299,8 +318,10 @@ class WearableBleManager(
 
             if (autoConnectOnScan && hasTargetService) {
                 autoConnectOnScan = false
-                stopScan()
-                connectToDevice(device)
+                scope.launch(bleDispatcher) {
+                    stopScanInternal()
+                    connectToDeviceInternal(device)
+                }
             }
         }
 
@@ -318,7 +339,11 @@ class WearableBleManager(
         if (servicesDiscoveryStarted) return
         servicesDiscoveryStarted = true
         mtuFallbackJob?.cancel()
-        targetGatt.discoverServices()
+        scope.launch(bleDispatcher) {
+            if (gatt === targetGatt) {
+                targetGatt.discoverServices()
+            }
+        }
     }
 
     private val gattCallback = object : BluetoothGattCallback() {
@@ -326,23 +351,29 @@ class WearableBleManager(
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             if (newState == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS) {
                 servicesDiscoveryStarted = false
-                _statusMessage.value = "Connected. Negotiating MTU ($REQUESTED_MTU bytes)…"
-                val requested = gatt.requestMtu(REQUESTED_MTU)
-                if (!requested) {
-                    triggerDiscoverServices(gatt)
-                } else {
-                    // Fallback in case the phone's BT stack never invokes onMtuChanged
-                    mtuFallbackJob?.cancel()
-                    mtuFallbackJob = scope.launch(Dispatchers.Main) {
-                        delay(MTU_FALLBACK_MS)
-                        if (!servicesDiscoveryStarted && this@WearableBleManager.gatt === gatt) {
-                            Log.w(TAG, "MTU callback timed out; falling back to discoverServices()")
-                            triggerDiscoverServices(gatt)
+                _statusMessage.value = "Connected. Optimizing BLE link…"
+                scope.launch(bleDispatcher) {
+                    // Request high-priority low-latency connection interval (11.25–15ms)
+                    try {
+                        gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
+                    } catch (_: Exception) {
+                    }
+                    val requested = gatt.requestMtu(REQUESTED_MTU)
+                    if (!requested) {
+                        triggerDiscoverServices(gatt)
+                    } else {
+                        mtuFallbackJob?.cancel()
+                        mtuFallbackJob = scope.launch(bleDispatcher) {
+                            delay(MTU_FALLBACK_MS)
+                            if (!servicesDiscoveryStarted && this@WearableBleManager.gatt === gatt) {
+                                Log.w(TAG, "MTU callback timed out; discovering services")
+                                triggerDiscoverServices(gatt)
+                            }
                         }
                     }
                 }
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                closeGatt()
+                scope.launch(bleDispatcher) { closeGattInternal() }
                 _connectionState.value = BleConnectionState.DISCONNECTED
                 if (!manualDisconnect) {
                     _statusMessage.value = "BLE disconnected (status $status)."
@@ -350,7 +381,6 @@ class WearableBleManager(
             }
         }
 
-        @SuppressLint("MissingPermission")
         override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
             Log.i(TAG, "MTU negotiated: $mtu (status=$status)")
             triggerDiscoverServices(gatt)
@@ -364,33 +394,35 @@ class WearableBleManager(
                 return
             }
 
-            val service = gatt.getService(SERVICE_UUID)
-            val characteristic = service?.getCharacteristic(CHARACTERISTIC_UUID)
-            if (service == null || characteristic == null) {
-                _statusMessage.value = "Target EdgeAI health service/characteristic not found."
-                disconnect()
-                return
-            }
-
-            if (!gatt.setCharacteristicNotification(characteristic, true)) {
-                _statusMessage.value = "Failed to enable local GATT notifications."
-                disconnect()
-                return
-            }
-
-            val cccd = characteristic.getDescriptor(CCCD_UUID)
-            if (cccd != null) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    gatt.writeDescriptor(cccd, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
-                } else {
-                    @Suppress("DEPRECATION")
-                    cccd.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                    @Suppress("DEPRECATION")
-                    gatt.writeDescriptor(cccd)
+            scope.launch(bleDispatcher) {
+                val service = gatt.getService(SERVICE_UUID)
+                val characteristic = service?.getCharacteristic(CHARACTERISTIC_UUID)
+                if (service == null || characteristic == null) {
+                    _statusMessage.value = "Target EdgeAI health service/characteristic not found."
+                    disconnect()
+                    return@launch
                 }
-            } else {
-                _connectionState.value = BleConnectionState.CONNECTED
-                _statusMessage.value = "Connected and monitoring notifications."
+
+                if (!gatt.setCharacteristicNotification(characteristic, true)) {
+                    _statusMessage.value = "Failed to enable local GATT notifications."
+                    disconnect()
+                    return@launch
+                }
+
+                val cccd = characteristic.getDescriptor(CCCD_UUID)
+                if (cccd != null) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        gatt.writeDescriptor(cccd, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        cccd.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                        @Suppress("DEPRECATION")
+                        gatt.writeDescriptor(cccd)
+                    }
+                } else {
+                    _connectionState.value = BleConnectionState.CONNECTED
+                    _statusMessage.value = "Connected and monitoring notifications."
+                }
             }
         }
 
@@ -413,7 +445,8 @@ class WearableBleManager(
             value: ByteArray,
         ) {
             if (characteristic.uuid == CHARACTERISTIC_UUID) {
-                handlePayload(value)
+                val copy = value.copyOf()
+                scope.launch(Dispatchers.Default) { handlePayload(copy) }
             }
         }
 
@@ -424,7 +457,8 @@ class WearableBleManager(
             characteristic: BluetoothGattCharacteristic,
         ) {
             if (characteristic.uuid == CHARACTERISTIC_UUID) {
-                characteristic.value?.let { handlePayload(it) }
+                val copy = characteristic.value?.copyOf() ?: return
+                scope.launch(Dispatchers.Default) { handlePayload(copy) }
             }
         }
 
@@ -432,7 +466,6 @@ class WearableBleManager(
             val chunk = bytes.toString(Charsets.UTF_8)
             if (chunk.isBlank()) return
 
-            // Fast path: complete single-notification JSON packet
             val trimmed = chunk.trim()
             if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
                 val packet = parseHealthPacket(trimmed)
@@ -443,7 +476,6 @@ class WearableBleManager(
                 }
             }
 
-            // Fallback path: reassemble fragmented JSON across multiple 20-byte BLE packets
             synchronized(jsonBuffer) {
                 if (jsonBuffer.length + chunk.length > MAX_JSON_BUFFER) {
                     jsonBuffer.setLength(0)

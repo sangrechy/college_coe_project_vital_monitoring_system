@@ -32,13 +32,25 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
 
+/**
+ * Primitive FloatArray ECG snapshot updated at 10 Hz — read ONLY in Compose Draw phase!
+ * Zero List<Float> boxing allocations.
+ */
 @Immutable
-data class LiveTelemetryState(
+class EcgWaveSnapshot(
+    val raw: FloatArray = FloatArray(0),
+    val filt: FloatArray = FloatArray(0),
+    val version: Long = 0L,
+)
+
+/**
+ * Throttled (~2.5 Hz) numeric vitals snapshot so text & layout never recompose at 10 Hz.
+ */
+@Immutable
+data class VitalsUiState(
     val latestPacket: HealthPacket? = null,
-    val ecgRawBuffer: List<Float> = emptyList(),
-    val ecgFiltBuffer: List<Float> = emptyList(),
-    val packetRate: Double = 0.0,
     val signalQuality: String = "Unknown",
+    val packetRate: Double = 0.0,
 )
 
 @Immutable
@@ -75,6 +87,7 @@ class WearableViewModel(application: Application) : AndroidViewModel(application
     companion object {
         private const val ECG_BUFFER_SIZE = 120
         private const val DB_FLUSH_INTERVAL_MS = 1500L
+        private const val VITALS_UI_THROTTLE_MS = 350L // ~2.8 Hz smooth human-readable updates
     }
 
     private val db = HealthDatabase(application)
@@ -84,8 +97,11 @@ class WearableViewModel(application: Application) : AndroidViewModel(application
         onPacketReceived = { packet, rawJson -> handleIncomingPacket(packet, rawJson) },
     )
 
-    private val _liveState = MutableStateFlow(LiveTelemetryState())
-    val liveState: StateFlow<LiveTelemetryState> = _liveState.asStateFlow()
+    private val _ecgStream = MutableStateFlow(EcgWaveSnapshot())
+    val ecgStream: StateFlow<EcgWaveSnapshot> = _ecgStream.asStateFlow()
+
+    private val _vitalsState = MutableStateFlow(VitalsUiState())
+    val vitalsState: StateFlow<VitalsUiState> = _vitalsState.asStateFlow()
 
     private val _deviceState = MutableStateFlow(DeviceUiState())
     val deviceState: StateFlow<DeviceUiState> = _deviceState.asStateFlow()
@@ -94,12 +110,23 @@ class WearableViewModel(application: Application) : AndroidViewModel(application
     val historyState: StateFlow<HistoryUiState> = _historyState.asStateFlow()
 
     private val startTimeMs = System.currentTimeMillis()
-    private val ecgRawRing = ArrayDeque<Float>(ECG_BUFFER_SIZE)
-    private val ecgFiltRing = ArrayDeque<Float>(ECG_BUFFER_SIZE)
+    private val ecgRawRing = FloatArray(ECG_BUFFER_SIZE)
+    private val ecgFiltRing = FloatArray(ECG_BUFFER_SIZE)
+    private var rawCount = 0
+    private var rawHead = 0
+    private var filtCount = 0
+    private var filtHead = 0
+    private var waveVersion = 0L
+
     private val pendingDbQueue = ConcurrentLinkedQueue<Triple<Long, HealthPacket, String?>>()
 
     @Volatile
     private var packetsThisWindow = 0
+    @Volatile
+    private var latestPacketRef: HealthPacket? = null
+    @Volatile
+    private var latestSignalQuality: String = "Unknown"
+    private var lastVitalsEmitMs = 0L
     private var lastRateTimestampMs = System.currentTimeMillis()
     private var demoJob: Job? = null
 
@@ -153,26 +180,29 @@ class WearableViewModel(application: Application) : AndroidViewModel(application
                 delay(1000L)
                 val now = System.currentTimeMillis()
                 val elapsedSec = (now - lastRateTimestampMs) / 1000.0
+                var rate = _vitalsState.value.packetRate
                 if (elapsedSec >= 1.0) {
                     val count = packetsThisWindow
                     packetsThisWindow = 0
                     lastRateTimestampMs = now
-                    val rate = ((count / elapsedSec) * 10.0).roundToInt() / 10.0
-                    _liveState.update { if (it.packetRate != rate) it.copy(packetRate = rate) else it }
+                    rate = ((count / elapsedSec) * 10.0).roundToInt() / 10.0
+                    _vitalsState.update {
+                        if (it.packetRate != rate) it.copy(packetRate = rate) else it
+                    }
                 }
                 val up = (now - startTimeMs) / 1000L
-                val liveSnap = _liveState.value
+                val quality = latestSignalQuality
                 _deviceState.update {
                     it.copy(
                         uptimeSeconds = up,
-                        packetRate = liveSnap.packetRate,
-                        signalQuality = liveSnap.signalQuality,
+                        packetRate = rate,
+                        signalQuality = quality,
                     )
                 }
             }
         }
 
-        // Batched SQLite writer (flushes every 1.5s in a single transaction -> zero UI stutter)
+        // Batched SQLite writer (1 transaction per 1.5s)
         viewModelScope.launch(Dispatchers.IO) {
             while (isActive) {
                 delay(DB_FLUSH_INTERVAL_MS)
@@ -216,34 +246,59 @@ class WearableViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun handleIncomingPacket(packet: HealthPacket, rawJson: String?) {
+        val now = System.currentTimeMillis()
         packetsThisWindow++
-        pendingDbQueue.offer(Triple(System.currentTimeMillis(), packet, rawJson))
+        pendingDbQueue.offer(Triple(now, packet, rawJson))
+        latestPacketRef = packet
+        val quality = calcSignalQuality(packet)
+        latestSignalQuality = quality
 
         val ecgRaw = packet.raw?.ecg?.toFloat()
         val ecgFilt = packet.features?.ecgFilt?.toFloat()
 
         synchronized(ecgRawRing) {
             if (ecgRaw != null) {
-                if (ecgRawRing.size >= ECG_BUFFER_SIZE) ecgRawRing.removeFirst()
-                ecgRawRing.addLast(ecgRaw)
+                ecgRawRing[rawHead] = ecgRaw
+                rawHead = (rawHead + 1) % ECG_BUFFER_SIZE
+                if (rawCount < ECG_BUFFER_SIZE) rawCount++
             }
             if (ecgFilt != null) {
-                if (ecgFiltRing.size >= ECG_BUFFER_SIZE) ecgFiltRing.removeFirst()
-                ecgFiltRing.addLast(ecgFilt)
+                ecgFiltRing[filtHead] = ecgFilt
+                filtHead = (filtHead + 1) % ECG_BUFFER_SIZE
+                if (filtCount < ECG_BUFFER_SIZE) filtCount++
             }
-            val rawCopy = ecgRawRing.toList()
-            val filtCopy = ecgFiltRing.toList()
-            val quality = calcSignalQuality(packet)
 
-            _liveState.update {
+            val rawArr = extractOrdered(ecgRawRing, rawHead, rawCount)
+            val filtArr = extractOrdered(ecgFiltRing, filtHead, filtCount)
+            waveVersion++
+            _ecgStream.value = EcgWaveSnapshot(raw = rawArr, filt = filtArr, version = waveVersion)
+        }
+
+        // Throttle numeric vitals/AI UI updates to ~2.8 Hz (eliminates 70% of text layout recompositions!)
+        if (now - lastVitalsEmitMs >= VITALS_UI_THROTTLE_MS) {
+            lastVitalsEmitMs = now
+            _vitalsState.update {
                 it.copy(
                     latestPacket = packet,
-                    ecgRawBuffer = rawCopy,
-                    ecgFiltBuffer = filtCopy,
                     signalQuality = quality,
                 )
             }
         }
+    }
+
+    private fun extractOrdered(ring: FloatArray, head: Int, count: Int): FloatArray {
+        val out = FloatArray(count)
+        if (count == 0) return out
+        if (count < ECG_BUFFER_SIZE) {
+            ring.copyInto(out, 0, 0, count)
+        } else {
+            val tailLen = ECG_BUFFER_SIZE - head
+            ring.copyInto(out, 0, head, ECG_BUFFER_SIZE)
+            if (head > 0) {
+                ring.copyInto(out, tailLen, 0, head)
+            }
+        }
+        return out
     }
 
     private fun loadHistoryInternal() {

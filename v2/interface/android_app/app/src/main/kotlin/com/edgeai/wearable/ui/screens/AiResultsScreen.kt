@@ -35,7 +35,7 @@ import androidx.compose.ui.unit.sp
 import com.edgeai.wearable.data.BadgeLevel
 import com.edgeai.wearable.data.HealthLabels
 import com.edgeai.wearable.data.LabelInfo
-import com.edgeai.wearable.ui.LiveTelemetryState
+import com.edgeai.wearable.ui.VitalsUiState
 import com.edgeai.wearable.ui.components.AlertBanner
 import com.edgeai.wearable.ui.components.ClinicalCard
 import com.edgeai.wearable.ui.components.KeyValueRow
@@ -55,8 +55,8 @@ import com.edgeai.wearable.ui.theme.TextPrimary
 import com.edgeai.wearable.ui.theme.TextSecondary
 
 @Composable
-fun AiResultsScreen(live: LiveTelemetryState) {
-    val ai = live.latestPacket?.ai
+fun AiResultsScreen(vitals: VitalsUiState) {
+    val ai = vitals.latestPacket?.ai
     val ecgCode = ai?.ecgClass ?: -1
     val stressCode = ai?.stressClass ?: -1
     val statusCode = ai?.status ?: -1
