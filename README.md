@@ -54,7 +54,7 @@ COE_SEM_4_VITAL_MOINTER_SYSTEM/
 │
 ├── v2/
 │   │
-│   ├── UI/
+│   ├── interface/
 │   │   └── backend/
 │   │       ├── main.py
 │   │       ├── ble_client.py
@@ -111,7 +111,7 @@ cd collage_project_coe_sem_4_vital_mointer_system
 ### 2. Install the Backend
 
 ```bash
-cd v2/UI/backend
+cd v2/interface/backend
 python3 -m venv venv
 source venv/bin/activate
 pip install fastapi uvicorn bleak
@@ -179,19 +179,21 @@ Open Serial Monitor at:
 
 ---
 
-# 🔌 Hardware Pinout
+# 🔌 Hardware Pinout (New Prototype)
 
 ## 🫀 AD8232 — ECG
 
 | AD8232 | ESP32-S3 |
 | ------ | -------- |
 | OUTPUT | GPIO 4   |
+| LO+    | GPIO 5   |
+| LO-    | GPIO 6   |
 | VCC    | 3.3V     |
 | GND    | GND      |
 
 ---
 
-## ❤️ MAX30102 — Heart Rate / Optical Data
+## ❤️ MAX30102 — Heart Rate / $\text{SpO}_2$ Optical Data
 
 | MAX30102 | ESP32-S3 |
 | -------- | -------- |
@@ -208,37 +210,41 @@ Open Serial Monitor at:
 
 ---
 
-## 🌡️ MLX90614 — Temperature
+## 🌡️ TMP117 — High-Precision Temperature
 
-| MLX90614 | ESP32-S3 |
-| -------- | -------- |
-| SDA      | GPIO 8   |
-| SCL      | GPIO 9   |
-| VCC      | 3.3V     |
-| GND      | GND      |
+| TMP117 | ESP32-S3 |
+| ------ | -------- |
+| SDA    | GPIO 8   |
+| SCL    | GPIO 9   |
+| VCC    | 3.3V     |
+| GND    | GND      |
 
 **I2C Address:**
 
 ```text
-0x5A
+0x48
 ```
 
 ---
 
-## 🏃 MPU6050 — Motion / Acceleration
+## 🏃 MPU6500 — 6-Axis Motion / Acceleration
 
-| MPU6050 | ESP32-S3 |
+| MPU6500 | ESP32-S3 |
 | ------- | -------- |
 | SDA     | GPIO 8   |
 | SCL     | GPIO 9   |
 | VCC     | 3.3V     |
 | GND     | GND      |
 
-**I2C Address:**
+**I2C Address:** `0x68` (`WHO_AM_I = 0x70`)
 
-```text
-0x68
-```
+---
+
+## 💡 Onboard Status RGB LED (NeoPixel)
+
+| Peripheral | ESP32-S3 |
+| ---------- | -------- |
+| NeoPixel   | GPIO 48  |
 
 All I2C sensors share:
 
@@ -284,7 +290,7 @@ Start the backend after powering on the ESP32. It will automatically attempt to 
 BLE configuration is located in:
 
 ```text
-v2/UI/backend/ble_client.py
+v2/interface/backend/ble_client.py
 ```
 
 Look for:

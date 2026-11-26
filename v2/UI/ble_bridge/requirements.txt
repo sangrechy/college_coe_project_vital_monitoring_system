@@ -1,4 +1,0 @@
-bleak
-fastapi
-uvicorn
-httpx

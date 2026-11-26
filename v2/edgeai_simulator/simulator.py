@@ -67,10 +67,11 @@ class Simulator:
             status_val = 0  # Normal Baseline
 
         # Construct payload delivery maps
+        spo2_val = round(random.uniform(96.5, 99.5), 1)
         data_payload = {
             "raw": {
                 "ecg": ecg_raw, "temp": round(self.temp, 2), "ir": ir, "red": red,
-                "ax": ax, "ay": ay, "az": az
+                "spo2": spo2_val, "ax": ax, "ay": ay, "az": az
             },
             "features": {
                 "ecg_filt": ecg_filt, "rr": rr, "hr": int(self.hr), "hrv": hrv, "motion": motion
@@ -81,7 +82,7 @@ class Simulator:
         }
 
         vital_record = {
-            "time": now_ms, "hr": int(self.hr), "spo2": random.randint(97, 99),
+            "time": now_ms, "hr": int(self.hr), "spo2": spo2_val,
             "temp": round(self.temp, 2), "motion": motion
         }
         
