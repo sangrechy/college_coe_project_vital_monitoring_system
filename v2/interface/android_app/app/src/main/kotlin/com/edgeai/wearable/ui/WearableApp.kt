@@ -258,6 +258,8 @@ fun WearableApp(
                         onSetTargetAddress = viewModel::setTargetAddress,
                         onSetDemoMode = viewModel::setDemoMode,
                         onClearDatabase = viewModel::clearDatabase,
+                        onSaveSmsConfig = viewModel::saveSmsConfig,
+                        onSendTestSms = viewModel::sendTestSms,
                     )
                 }
             }

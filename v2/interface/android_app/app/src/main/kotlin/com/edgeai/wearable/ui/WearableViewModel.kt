@@ -15,6 +15,9 @@ import com.edgeai.wearable.data.ScannedBleDevice
 import com.edgeai.wearable.data.TrendPoint
 import com.edgeai.wearable.data.VitalsTrendRow
 import com.edgeai.wearable.data.calcSignalQuality
+import com.edgeai.wearable.sms.EmergencySmsFormatter
+import com.edgeai.wearable.sms.EmergencySmsManager
+import com.edgeai.wearable.sms.SmsAlertConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -68,6 +71,7 @@ data class DeviceUiState(
     val demoMode: Boolean = false,
     val packetRate: Double = 0.0,
     val signalQuality: String = "Unknown",
+    val smsConfig: SmsAlertConfig = SmsAlertConfig(),
 ) {
     val isConnected: Boolean
         get() = bleState == BleConnectionState.CONNECTED || demoMode
@@ -91,6 +95,7 @@ class WearableViewModel(application: Application) : AndroidViewModel(application
     }
 
     private val db = HealthDatabase(application)
+    private val smsManager = EmergencySmsManager(application)
     private val bleManager = WearableBleManager(
         context = application,
         scope = viewModelScope,
@@ -103,7 +108,7 @@ class WearableViewModel(application: Application) : AndroidViewModel(application
     private val _vitalsState = MutableStateFlow(VitalsUiState())
     val vitalsState: StateFlow<VitalsUiState> = _vitalsState.asStateFlow()
 
-    private val _deviceState = MutableStateFlow(DeviceUiState())
+    private val _deviceState = MutableStateFlow(DeviceUiState(smsConfig = smsManager.loadConfig()))
     val deviceState: StateFlow<DeviceUiState> = _deviceState.asStateFlow()
 
     private val _historyState = MutableStateFlow(HistoryUiState())
@@ -281,6 +286,69 @@ class WearableViewModel(application: Application) : AndroidViewModel(application
                 it.copy(
                     latestPacket = packet,
                     signalQuality = quality,
+                )
+            }
+        }
+
+        // Evaluate automatic emergency SMS (real BLE only, never triggers on Demo Mode)
+        val devSnap = _deviceState.value
+        if (!devSnap.demoMode && devSnap.smsConfig.enabled) {
+            val reason = smsManager.evaluatePacket(packet, devSnap.smsConfig, now)
+            if (reason != null) {
+                val cfg = devSnap.smsConfig
+                val msg = EmergencySmsFormatter.buildEmergencyMessage(cfg, reason, packet)
+                viewModelScope.launch(Dispatchers.IO) {
+                    val result = smsManager.sendSmsSync(cfg.phoneNumber, msg)
+                    val info = result.fold(
+                        onSuccess = { "Auto-alert ($reason): $it" },
+                        onFailure = { "SMS failed: ${it.message}" },
+                    )
+                    _deviceState.update {
+                        it.copy(
+                            smsConfig = it.smsConfig.copy(lastSentInfo = info),
+                            bleMessage = info,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    fun saveSmsConfig(config: SmsAlertConfig) {
+        val cleaned = config.copy(
+            phoneNumber = config.phoneNumber.trim(),
+            patientName = config.patientName.trim(),
+            customNote = config.customNote.trim(),
+            cooldownMinutes = config.cooldownMinutes.coerceIn(1, 60),
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            smsManager.saveConfig(cleaned)
+        }
+        _deviceState.update {
+            it.copy(
+                smsConfig = cleaned,
+                bleMessage = if (cleaned.enabled && cleaned.phoneNumber.isNotEmpty()) {
+                    "Emergency SMS alerts active for ${cleaned.phoneNumber}."
+                } else {
+                    "Emergency SMS settings saved."
+                },
+            )
+        }
+    }
+
+    fun sendTestSms(config: SmsAlertConfig) {
+        saveSmsConfig(config)
+        val message = EmergencySmsFormatter.buildTestMessage(config)
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = smsManager.sendSmsSync(config.phoneNumber, message)
+            val info = result.fold(
+                onSuccess = { "Test SMS: $it" },
+                onFailure = { "Test SMS failed: ${it.message}" },
+            )
+            _deviceState.update {
+                it.copy(
+                    smsConfig = it.smsConfig.copy(lastSentInfo = info),
+                    bleMessage = info,
                 )
             }
         }
