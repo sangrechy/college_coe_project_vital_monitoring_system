@@ -317,100 +317,6 @@ fun DeviceStatusScreen(
             }
         }
 
-        // System Diagnostics Card
-        item(key = "sys_diag") {
-            ClinicalCard {
-                Text("System Diagnostics", fontFamily = ManropeFontFamily, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                Spacer(modifier = Modifier.height(8.dp))
-                KeyValueRow("Transport", if (device.demoMode) "Synthetic Simulator" else "Direct Android BLE", mono = true)
-                KeyValueRow("Packet Rate", "$packetRate Hz", mono = true)
-                KeyValueRow("Signal Quality", signalQuality)
-                KeyValueRow("App Uptime", HealthLabels.formatUptime(device.uptimeSeconds), mono = true)
-                KeyValueRow("Records in DB", device.dbRecordCount.toString(), mono = true)
-                KeyValueRow("Storage", "SQLite WAL (on-device)", mono = true, showDivider = false)
-            }
-        }
-
-        // BLE Device Scanner
-        item(key = "ble_scanner") {
-            ClinicalCard {
-                Text("BLE Device Scanner", fontFamily = ManropeFontFamily, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                Text("Scan nearby BLE peripherals and tap to connect", fontFamily = ManropeFontFamily, fontSize = 12.sp, color = TextMuted)
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Button(
-                    onClick = {
-                        if (device.isScanning) onStopScan() else runWithBlePermission { onScan() }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
-                    shape = RoundedCornerShape(10.dp),
-                ) {
-                    Text(
-                        if (device.isScanning) "Stop Scan" else "Scan for Devices",
-                        fontFamily = ManropeFontFamily,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-
-                if (device.scannedDevices.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Text(
-                        "${device.scannedDevices.size} device(s) found — tap to connect:",
-                        fontFamily = ManropeFontFamily,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextSecondary,
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        device.scannedDevices.forEach { d ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(if (d.hasTargetService) AccentTealLight else BgSoft)
-                                    .border(
-                                        1.dp,
-                                        if (d.hasTargetService) AccentTealBorder else BorderLight,
-                                        RoundedCornerShape(12.dp),
-                                    )
-                                    .clickable {
-                                        runWithBlePermission { onConnect(d.address) }
-                                    }
-                                    .padding(horizontal = 14.dp, vertical = 11.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = if (d.hasTargetService) "${d.name} ★" else d.name,
-                                        fontFamily = ManropeFontFamily,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = TextPrimary,
-                                    )
-                                    Text(
-                                        text = d.address,
-                                        fontSize = 11.sp,
-                                        fontFamily = IbmPlexMonoFontFamily,
-                                        color = TextMuted,
-                                    )
-                                }
-                                if (d.rssi != null) {
-                                    Text(
-                                        text = "${d.rssi} dBm",
-                                        fontSize = 11.sp,
-                                        fontFamily = IbmPlexMonoFontFamily,
-                                        color = TextSecondary,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
         // Settings & Tools Card (includes clickable Emergency SMS Alerts row)
         item(key = "settings_tools") {
             ClinicalCard {
@@ -551,6 +457,100 @@ fun DeviceStatusScreen(
                         fontWeight = FontWeight.SemiBold,
                     )
                 }
+            }
+        }
+
+        // BLE Device Scanner
+        item(key = "ble_scanner") {
+            ClinicalCard {
+                Text("BLE Device Scanner", fontFamily = ManropeFontFamily, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                Text("Scan nearby BLE peripherals and tap to connect", fontFamily = ManropeFontFamily, fontSize = 12.sp, color = TextMuted)
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Button(
+                    onClick = {
+                        if (device.isScanning) onStopScan() else runWithBlePermission { onScan() }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
+                    shape = RoundedCornerShape(10.dp),
+                ) {
+                    Text(
+                        if (device.isScanning) "Stop Scan" else "Scan for Devices",
+                        fontFamily = ManropeFontFamily,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+
+                if (device.scannedDevices.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Text(
+                        "${device.scannedDevices.size} device(s) found — tap to connect:",
+                        fontFamily = ManropeFontFamily,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextSecondary,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        device.scannedDevices.forEach { d ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (d.hasTargetService) AccentTealLight else BgSoft)
+                                    .border(
+                                        1.dp,
+                                        if (d.hasTargetService) AccentTealBorder else BorderLight,
+                                        RoundedCornerShape(12.dp),
+                                    )
+                                    .clickable {
+                                        runWithBlePermission { onConnect(d.address) }
+                                    }
+                                    .padding(horizontal = 14.dp, vertical = 11.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = if (d.hasTargetService) "${d.name} ★" else d.name,
+                                        fontFamily = ManropeFontFamily,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextPrimary,
+                                    )
+                                    Text(
+                                        text = d.address,
+                                        fontSize = 11.sp,
+                                        fontFamily = IbmPlexMonoFontFamily,
+                                        color = TextMuted,
+                                    )
+                                }
+                                if (d.rssi != null) {
+                                    Text(
+                                        text = "${d.rssi} dBm",
+                                        fontSize = 11.sp,
+                                        fontFamily = IbmPlexMonoFontFamily,
+                                        color = TextSecondary,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // System Diagnostics Card
+        item(key = "sys_diag") {
+            ClinicalCard {
+                Text("System Diagnostics", fontFamily = ManropeFontFamily, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                Spacer(modifier = Modifier.height(8.dp))
+                KeyValueRow("Transport", if (device.demoMode) "Synthetic Simulator" else "Direct Android BLE", mono = true)
+                KeyValueRow("Packet Rate", "$packetRate Hz", mono = true)
+                KeyValueRow("Signal Quality", signalQuality)
+                KeyValueRow("App Uptime", HealthLabels.formatUptime(device.uptimeSeconds), mono = true)
+                KeyValueRow("Records in DB", device.dbRecordCount.toString(), mono = true)
+                KeyValueRow("Storage", "SQLite WAL (on-device)", mono = true, showDivider = false)
             }
         }
 
