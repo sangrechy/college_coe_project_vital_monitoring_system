@@ -1,5 +1,7 @@
 package com.edgeai.wearable.ui
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -104,8 +106,8 @@ fun WearableApp(
                             // Deep teal rounded brand-mark matching Sidebar.js
                             Box(
                                 modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(RoundedCornerShape(11.dp))
+                                    .size(34.dp)
+                                    .clip(RoundedCornerShape(10.dp))
                                     .background(AccentTeal),
                                 contentAlignment = Alignment.Center,
                             ) {
@@ -144,12 +146,12 @@ fun WearableApp(
                         )
                     },
                 )
-                HorizontalDivider(color = BorderLight, thickness = 1.dp)
+                HorizontalDivider(color = BorderLight, thickness = 0.75.dp)
             }
         },
         bottomBar = {
             Column {
-                HorizontalDivider(color = BorderLight, thickness = 1.dp)
+                HorizontalDivider(color = BorderLight, thickness = 0.75.dp)
                 NavigationBar(
                     containerColor = BgCard,
                     tonalElevation = 0.dp,
@@ -186,18 +188,10 @@ fun WearableApp(
             modifier = Modifier
                 .fillMaxSize()
                 .background(BgPage)
-                .drawBehind {
-                    drawRect(
-                        brush = Brush.radialGradient(
-                            colors = listOf(AccentTeal.copy(alpha = 0.08f), Color.Transparent),
-                            center = Offset(size.width * 0.92f, -size.height * 0.05f),
-                            radius = size.width * 0.95f,
-                        )
-                    )
-                }
                 .padding(innerPadding),
         ) {
-            when (currentTab) {
+            Crossfade(targetState = currentTab, animationSpec = tween(160), label = "tab") { tab ->
+            when (tab) {
                 WearableTab.OVERVIEW -> {
                     val vitals by viewModel.vitalsState.collectAsStateWithLifecycle()
                     OverviewScreen(
@@ -263,6 +257,7 @@ fun WearableApp(
                     )
                 }
             }
+            }
         }
     }
 }
@@ -282,7 +277,6 @@ private fun TopBarStatusActions(
             modifier = Modifier
                 .clip(RoundedCornerShape(999.dp))
                 .background(BgPage)
-                .border(1.dp, BorderLight, RoundedCornerShape(999.dp))
                 .padding(horizontal = 8.dp, vertical = 4.dp)
         ) {
             Text(

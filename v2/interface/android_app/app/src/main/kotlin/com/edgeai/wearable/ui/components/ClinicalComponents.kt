@@ -122,7 +122,6 @@ fun StatusBadge(
         modifier = modifier
             .clip(RoundedCornerShape(999.dp))
             .background(bg)
-            .border(1.dp, border, RoundedCornerShape(999.dp))
             .padding(horizontal = 10.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp),
@@ -130,7 +129,7 @@ fun StatusBadge(
         if (showDot) {
             Box(
                 modifier = Modifier
-                    .size(7.dp)
+                    .size(6.dp)
                     .clip(CircleShape)
                     .background(fg)
             )
@@ -156,13 +155,13 @@ fun ClinicalCard(
     val cardMod = if (onClick != null) modifier.clickable { onClick() } else modifier
     Card(
         modifier = cardMod.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = BgCard),
-        border = BorderStroke(1.dp, BorderLight),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        border = BorderStroke(0.75.dp, BorderLight),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Column(
-            modifier = Modifier.padding(18.dp),
+            modifier = Modifier.padding(16.dp),
             content = content,
         )
     }
@@ -190,24 +189,23 @@ fun StatusHeroCard(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(gradient)
-            .border(1.dp, border, RoundedCornerShape(18.dp))
-            .padding(horizontal = 18.dp, vertical = 18.dp),
+            .clip(RoundedCornerShape(16.dp))
+            .background(bg)
+            .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         // Circular tone icon with soft 14% halo ring (exact .status-hero-icon)
         Box(
             modifier = Modifier
-                .size(56.dp)
+                .size(48.dp)
                 .clip(CircleShape)
-                .background(tone.copy(alpha = 0.14f)),
+                .background(tone.copy(alpha = 0.16f)),
             contentAlignment = Alignment.Center,
         ) {
             Box(
                 modifier = Modifier
-                    .size(44.dp)
+                    .size(38.dp)
                     .clip(CircleShape)
                     .background(tone),
                 contentAlignment = Alignment.Center,
@@ -216,7 +214,7 @@ fun StatusHeroCard(
                     imageVector = icon,
                     contentDescription = title,
                     tint = Color.White,
-                    modifier = Modifier.size(24.dp),
+                    modifier = Modifier.size(20.dp),
                 )
             }
         }
@@ -261,8 +259,8 @@ fun SectionTitle(
         color = TextMuted,
         fontSize = 11.sp,
         fontWeight = FontWeight.Bold,
-        letterSpacing = 1.1.sp,
-        modifier = modifier.padding(top = 6.dp, bottom = 4.dp, start = 2.dp),
+        letterSpacing = 0.9.sp,
+        modifier = modifier.padding(top = 10.dp, bottom = 2.dp, start = 4.dp),
     )
 }
 
@@ -279,7 +277,6 @@ fun AlertBanner(
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(bg)
-            .border(1.dp, border, RoundedCornerShape(14.dp))
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -334,13 +331,13 @@ fun StatTile(
     val cardMod = if (onClick != null) modifier.clickable { onClick() } else modifier
     Card(
         modifier = cardMod,
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = BgCard),
-        border = BorderStroke(1.dp, BorderLight),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        border = BorderStroke(0.75.dp, BorderLight),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 12.dp)) {
+            Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 14.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -373,9 +370,9 @@ fun StatTile(
                     if (icon != null) {
                         Box(
                             modifier = Modifier
-                                .size(32.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(accentColor.copy(alpha = 0.12f)),
+                                .size(30.dp)
+                                .clip(CircleShape)
+                                .background(accentColor.copy(alpha = 0.10f)),
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
@@ -428,15 +425,6 @@ fun StatTile(
                     }
                 }
             }
-            // Subtle inset bottom bar matching .stat-tile::after
-            Box(
-                modifier = Modifier
-                    .padding(horizontal = 18.dp)
-                    .fillMaxWidth()
-                    .height(3.dp)
-                    .clip(RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp))
-                    .background(accentColor.copy(alpha = 0.85f))
-            )
         }
     }
 }
@@ -452,7 +440,6 @@ fun RawSensorCell(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
             .background(BgSoft)
-            .border(1.dp, BorderLight, RoundedCornerShape(12.dp))
             .padding(vertical = 10.dp, horizontal = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -603,7 +590,6 @@ fun LiveSparklineAreaChart(
             .height(height)
             .clip(RoundedCornerShape(12.dp))
             .background(BgSoft)
-            .border(1.dp, BorderLight, RoundedCornerShape(12.dp))
             .padding(horizontal = 4.dp, vertical = 6.dp)
             .drawWithCache {
                 val linePath = Path()

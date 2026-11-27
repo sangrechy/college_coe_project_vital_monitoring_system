@@ -3,7 +3,7 @@ package com.edgeai.wearable.ui.theme
 import androidx.compose.ui.graphics.Color
 
 // Exact calm clinical light theme tokens from v2/interface/frontend/src/styles/global.css
-val BgPage = Color(0xFFF5F3EE)
+val BgPage = Color(0xFFF6F5F2)
 val BgCard = Color(0xFFFFFFFF)
 val BgSoft = Color(0xFFFAF8F4)
 val BgNavActive = Color(0xFFE4F1EE)
@@ -39,7 +39,7 @@ val NeutralColor = Color(0xFF5D6D73)
 val NeutralBg = Color(0xFFEEEAE3)
 val NeutralBorder = Color(0xFFDCD7CC)
 
-val BorderLight = Color(0xFFE9E5DC)
+val BorderLight = Color(0xFFE8E5DF)
 val BorderStrong = Color(0xFFD6D1C6)
 val GridColor = Color(0xFFEEEAE2)
 
