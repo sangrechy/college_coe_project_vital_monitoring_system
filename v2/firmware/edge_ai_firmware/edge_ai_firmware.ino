@@ -100,6 +100,7 @@ int fusion_op    = -1;
 unsigned long lastECGRead   = 0;
 unsigned long lastMPURead   = 0;
 unsigned long lastTempRead  = 0;
+unsigned long lastBLETick   = 0;
 unsigned long lastPrintTick = 0;
 
 // =========================================================================
@@ -221,25 +222,35 @@ void initializeTMP117() {
 // SENSOR READING SUBSYSTEMS
 // =========================================================================
 void readECGData(unsigned long currentTime) {
-    if (digitalRead(LO_PLUS) == 1 || digitalRead(LO_MINUS) == 1) {
-        ecgLeadOff  = true;
-        ecgRaw      = 0;
-        ecgFiltered = 0;
+    // Always read real analog ECG so the dashboard shows live signal changes
+    ecgRaw      = analogRead(ECG_PIN);
+    ecgFiltered = filterECG(ecgRaw);
+    ecgLeadOff  = (digitalRead(LO_PLUS) == 1 || digitalRead(LO_MINUS) == 1);
+
+    static float ecgBaseline = 2048.0f;
+    static float ecgEnv      = 0.0f;
+    static float prevAC      = 0.0f;
+
+    if (ecgLeadOff) {
+        // Leads off: do not extract cardiac ML features (prevents fake AI classifications)
         peak_amp    = 0.0f;
         beat_std    = 0.0f;
         beat_energy = 0.0f;
+        ecgEnv      = 0.0f;
+        prevAC      = 0.0f;
     } else {
-        ecgLeadOff  = false;
-        ecgRaw      = analogRead(ECG_PIN);
-        ecgFiltered = filterECG(ecgRaw);
+        // Adaptive baseline & AC envelope for reliable R-peak detection across pad impedances
+        ecgBaseline = 0.98f * ecgBaseline + 0.02f * (float)ecgFiltered;
+        float ecgAC = (float)ecgFiltered - ecgBaseline;
+        ecgEnv      = max(ecgEnv * 0.995f, fabs(ecgAC));
 
         if ((float)ecgFiltered > peak_amp) peak_amp = (float)ecgFiltered;
         beat_energy = (0.95f * beat_energy) + (0.05f * ((float)ecgFiltered * (float)ecgFiltered));
         float diff  = fabs((float)ecgFiltered - prevECG);
         beat_std    = (0.90f * beat_std) + (0.10f * diff);
 
-        // Real R-peak detection for ECG RR interval
-        if (ecgFiltered > ECG_PEAK_THRESHOLD && prevECG <= ECG_PEAK_THRESHOLD &&
+        float adaptThresh = max(120.0f, ecgEnv * 0.45f);
+        if (ecgAC > adaptThresh && prevAC <= adaptThresh &&
             (currentTime - lastEcgPeakTime) > ECG_REFRACTORY_MS) {
             if (lastEcgPeakTime != 0) {
                 unsigned long ecgDelta = currentTime - lastEcgPeakTime;
@@ -254,6 +265,7 @@ void readECGData(unsigned long currentTime) {
             }
             lastEcgPeakTime = currentTime;
         }
+        prevAC = ecgAC;
     }
     prevECG = (float)ecgFiltered;
 }
@@ -420,6 +432,7 @@ void setup() {
     lastECGRead   = now;
     lastMPURead   = now;
     lastTempRead  = now;
+    lastBLETick   = now;
     lastPrintTick = now;
 }
 
@@ -453,7 +466,7 @@ void loop() {
         readTMP117Data();
     }
 
-    // 6. Edge AI Inference & BLE Telemetry Broadcast (1 Hz) — REAL SIGNALS ONLY
+    // 6. Edge AI Inference & Serial Telemetry (1 Hz) — REAL SIGNALS ONLY
     if (currentTime - lastPrintTick >= 1000) {
         lastPrintTick = currentTime;
 
@@ -478,11 +491,15 @@ void loop() {
         peak_amp = ecgLeadOff ? 0.0f : (float)ecgFiltered;
 
         // Serial Monitor Telemetry Output
-        Serial.printf("ECG:%d | Filt:%d | BPM:%.1f | SpO2:%.1f%% | Temp:%.2fC | G:%.2fg | ECG_ML:%d | Stress_ML:%d | Fusion:%d\n",
-                      ecgRaw, ecgFiltered, heart_rate, spo2, bodyTemp, motion_level,
+        Serial.printf("ECG:%d | Filt:%d | LO:%d | BPM:%.1f | SpO2:%.1f%% | Temp:%.2fC | G:%.2fg | ECG_ML:%d | Stress_ML:%d | Fusion:%d\n",
+                      ecgRaw, ecgFiltered, ecgLeadOff ? 1 : 0, heart_rate, spo2, bodyTemp, motion_level,
                       ecg_ml_op, stress_ml_op, fusion_op);
+    }
 
-        // Full JSON Telemetry Packet over BLE
+    // 7. High-Rate BLE Telemetry Broadcast (20 Hz / every 50 ms) for smooth live ECG waveform
+    if (currentTime - lastBLETick >= 50) {
+        lastBLETick = currentTime;
+
         char jsonBuffer[384];
         snprintf(jsonBuffer, sizeof(jsonBuffer),
                  "{\"raw\":{\"ecg\":%d,\"temp\":%.2f,\"ir\":%ld,\"red\":%ld,\"spo2\":%.1f,\"ax\":%d,\"ay\":%d,\"az\":%d},"
